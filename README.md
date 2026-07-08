@@ -346,4 +346,7 @@ server. There's no database or API key dependency, so it should deploy as-is —
 this step is outside the scope of the assessment and isn't wired up here.
 
 ---
+ <img width="946" height="438" alt="Screenshot 2026-07-08 145924" src="https://github.com/user-attachments/assets/d35d22d3-9d8a-49a9-93e8-98e79025874b" />
+ 
+ 
 
