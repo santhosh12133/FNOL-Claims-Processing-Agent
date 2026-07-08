@@ -347,7 +347,3 @@ this step is outside the scope of the assessment and isn't wired up here.
 
 ---
 
-## Demo Video
-
-See `DEMO_SCRIPT.md` for a walkthrough script covering the test suite, the web
-UI across several routing outcomes, manual input, and the CLI batch mode.
