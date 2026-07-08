@@ -353,6 +353,7 @@ this step is outside the scope of the assessment and isn't wired up here.
  <img width="950" height="443" alt="Screenshot 2026-07-08 150014" src="https://github.com/user-attachments/assets/12021085-0220-4912-9105-ef7009224714" />
 
 
- <img width="950" height="443" alt="Screenshot 2026-07-08 150014" src="https://github.com/user-attachments/assets/f6e39c9c-9ee1-434b-b884-a3ddcaf46d02" />
+<img width="949" height="435" alt="Screenshot 2026-07-08 145901" src="https://github.com/user-attachments/assets/907b52c0-f35c-4dc6-8a2b-0fc90b0fac53" />
+
 
 
