@@ -347,6 +347,12 @@ this step is outside the scope of the assessment and isn't wired up here.
 
 ---
  <img width="946" height="438" alt="Screenshot 2026-07-08 145924" src="https://github.com/user-attachments/assets/d35d22d3-9d8a-49a9-93e8-98e79025874b" />
- 
- 
+
+ <img width="948" height="445" alt="Screenshot 2026-07-08 145950" src="https://github.com/user-attachments/assets/22fb2b4b-f93a-446e-9a12-642eadce2723" />
+
+ <img width="950" height="443" alt="Screenshot 2026-07-08 150014" src="https://github.com/user-attachments/assets/12021085-0220-4912-9105-ef7009224714" />
+
+
+ <img width="950" height="443" alt="Screenshot 2026-07-08 150014" src="https://github.com/user-attachments/assets/f6e39c9c-9ee1-434b-b884-a3ddcaf46d02" />
+
 
