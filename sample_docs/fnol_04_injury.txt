@@ -1,0 +1,22 @@
+FIRST NOTICE OF LOSS - AUTO CLAIM
+
+Policy Number: PA-1123-2026
+Policyholder Name: James Whitfield
+Effective Dates: 09/01/2025 - 09/01/2026
+
+Date of Loss: 06/30/2026
+Time of Loss: 07:55 AM
+Location of Loss: Highway 101 North, Exit 24, San Jose, CA
+Description of Accident: Multi-vehicle collision during the morning commute. Policyholder was rear-ended by another vehicle, causing a chain reaction. Policyholder reports neck and back pain and was transported to a local hospital for evaluation.
+
+Claimant: James Whitfield
+Third Parties: Angela Brooks (driver of vehicle 2), Marcus Lee (driver of vehicle 3)
+Contact Details: james.whitfield@email.com, (555) 664-9021
+
+Asset Type: Pickup Truck
+Asset ID: 1FTFW1ET5BFA12345
+Estimated Damage: $15,800.00
+
+Claim Type: Injury
+Attachments: police_report.pdf, medical_intake.pdf
+Initial Estimate: $15,800.00

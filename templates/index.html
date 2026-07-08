@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FNOL Triage Desk</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='2') }}">
+</head>
+<body>
+  <header class="masthead">
+    <div class="masthead__title">
+      <span class="masthead__kicker">FNOL</span>
+      <h1>Triage Desk</h1>
+    </div>
+    <p class="masthead__sub">Paste a claim, upload one, or pull a sample — get an instant routing call.</p>
+  </header>
+
+  <main class="desk">
+    <section class="intake" aria-label="Claim intake">
+      <div class="panel-label">Intake</div>
+
+      <div class="sample-row" id="sampleRow"></div>
+
+      <textarea id="textInput" spellcheck="false"
+        placeholder="Paste FNOL text here (one &quot;Label: value&quot; per line), or choose a sample above…"></textarea>
+
+      <div class="intake-actions">
+        <label class="upload-btn">
+          Upload .txt / .pdf
+          <input type="file" id="fileInput" accept=".txt,.pdf" hidden>
+        </label>
+        <button id="processBtn" class="process-btn" type="button">Process Claim</button>
+      </div>
+      <p class="intake-hint" id="fileHint">&nbsp;</p>
+    </section>
+
+    <section class="result" aria-label="Case result">
+      <div class="panel-label">Case Result</div>
+
+      <div id="resultEmpty" class="result-empty">
+        No claim processed yet. Pick a sample or paste a document to see the routing call.
+      </div>
+
+      <div id="resultCard" class="result-card" hidden>
+        <div class="result-header">
+          <span id="sourceFile" class="source-file"></span>
+          <div id="stamp" class="stamp"></div>
+        </div>
+
+        <p id="reasoning" class="reasoning"></p>
+
+        <div id="incidentDescription" class="incident-description" hidden>
+          <div class="incident-description__title">Incident Description</div>
+          <p id="incidentDescriptionText" class="incident-description__body"></p>
+        </div>
+
+        <div class="flags-row">
+          <div class="flag-block">
+            <div class="flag-title">Missing Fields</div>
+            <ul id="missingList" class="flag-list"></ul>
+          </div>
+          <div class="flag-block">
+            <div class="flag-title">Inconsistencies</div>
+            <ul id="inconsistencyList" class="flag-list"></ul>
+          </div>
+        </div>
+
+        <div class="fields-title">Extracted Fields</div>
+        <div id="fieldsGrid" class="fields-grid"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    Same extraction, validation, and routing logic as <code>main.py</code> — this is a browser on top of the CLI agent, not a separate implementation.
+  </footer>
+
+  <script src="{{ url_for('static', filename='app.js', v='2') }}"></script>
+</body>
+</html>
