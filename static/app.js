@@ -73,10 +73,17 @@ async function fetchJSON(url, options) {
   }
 }
 
+function processingSpinner() {
+  return `<svg class="processing-spinner" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="28" stroke-dashoffset="8"><animateTransform attributeName="transform" type="rotate" from="0 8 8" to="360 8 8" dur="0.8s" repeatCount="indefinite"/></circle></svg>`;
+}
+
 function setBusy(isBusy) {
   const btn = document.getElementById("processBtn");
   btn.disabled = isBusy || !selectedFile;
-  btn.innerHTML = isBusy ? "Processing…" : 'Next <span aria-hidden="true">→</span>';
+  btn.setAttribute("aria-busy", String(isBusy));
+  btn.innerHTML = isBusy
+    ? `${processingSpinner()}<span>Processing claim…</span>`
+    : 'Next <span aria-hidden="true">→</span>';
 }
 
 function setStep(step) {
@@ -144,6 +151,8 @@ function clearSelectedFile(resetResult = true) {
   document.getElementById("fileInput").value = "";
   document.getElementById("selectedFile").hidden = true;
   document.getElementById("processBtn").disabled = true;
+  document.getElementById("processBtn").setAttribute("aria-busy", "false");
+  document.getElementById("processBtn").innerHTML = 'Next <span aria-hidden="true">→</span>';
   document.getElementById("fileHint").textContent = "Choose a PDF or Word document to continue.";
   if (resetResult) setStep(1);
 }
@@ -269,7 +278,7 @@ function renderResult(result) {
 async function processSelectedFile() {
   if (!selectedFile) return;
   setBusy(true);
-  document.getElementById("fileHint").textContent = `Processing: ${selectedFile.name}`;
+  document.getElementById("fileHint").textContent = `Processing ${selectedFile.name}… Extracting and validating claim data.`;
 
   const formData = new FormData();
   formData.append("file", selectedFile);
