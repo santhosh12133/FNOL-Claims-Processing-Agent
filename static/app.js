@@ -7,7 +7,7 @@ const ROUTE_CLASS = {
 };
 
 const API_BASE = "/api/v1";
-const ALLOWED_EXTENSIONS = [".pdf", ".docx"];
+const ALLOWED_EXTENSIONS = [".pdf", ".docx", ".jpg", ".jpeg", ".png", ".webp"];
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 const CATEGORY_LABELS = {
@@ -121,7 +121,7 @@ function getExtension(filename) {
 function validateFile(file) {
   const extension = getExtension(file.name);
   if (!ALLOWED_EXTENSIONS.includes(extension)) {
-    return "Unsupported file type. Please choose a PDF (.pdf) or Word (.docx) document.";
+    return "Please choose a supported claim document or image.";
   }
   if (file.size > MAX_FILE_SIZE) {
     return "File is too large. The maximum supported size is 10 MB.";
@@ -153,7 +153,7 @@ function clearSelectedFile(resetResult = true) {
   document.getElementById("processBtn").disabled = true;
   document.getElementById("processBtn").setAttribute("aria-busy", "false");
   document.getElementById("processBtn").innerHTML = 'Next <span aria-hidden="true">→</span>';
-  document.getElementById("fileHint").textContent = "Choose a PDF or Word document to continue.";
+  document.getElementById("fileHint").textContent = "Choose a claim document or image to continue.";
   if (resetResult) setStep(1);
 }
 
@@ -190,7 +190,7 @@ function renderError(result) {
   document.getElementById("resultSource").textContent = result.error || "The document could not be processed.";
   document.getElementById("stamp").textContent = "Unable to process";
   document.getElementById("stamp").className = "route-name route-manual";
-  document.getElementById("recommendationSummary").textContent = "Please return to claim intake and submit a valid FNOL PDF or Word document.";
+  document.getElementById("recommendationSummary").textContent = "Please return to claim intake and submit a supported claim document or image.";
   document.getElementById("reasoning").textContent = result.error || "The document could not be processed.";
   document.getElementById("completenessMetric").textContent = "—";
   document.getElementById("missingMetric").textContent = "0";
