@@ -121,7 +121,7 @@ function getExtension(filename) {
 function validateFile(file) {
   const extension = getExtension(file.name);
   if (!ALLOWED_EXTENSIONS.includes(extension)) {
-    return "Please choose a supported claim document or image.";
+    return "Please choose a supported claim file.";
   }
   if (file.size > MAX_FILE_SIZE) {
     return "File is too large. The maximum supported size is 10 MB.";
@@ -142,7 +142,7 @@ function selectFile(file) {
   document.getElementById("fileSize").textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
   document.getElementById("selectedFile").hidden = false;
   document.getElementById("processBtn").disabled = false;
-  document.getElementById("fileHint").textContent = "Document selected. Select Next to process the claim.";
+  document.getElementById("fileHint").textContent = "Claim file selected. Select Next to process the claim.";
   return true;
 }
 
@@ -153,7 +153,7 @@ function clearSelectedFile(resetResult = true) {
   document.getElementById("processBtn").disabled = true;
   document.getElementById("processBtn").setAttribute("aria-busy", "false");
   document.getElementById("processBtn").innerHTML = 'Next <span aria-hidden="true">→</span>';
-  document.getElementById("fileHint").textContent = "Choose a claim document or image to continue.";
+  document.getElementById("fileHint").textContent = "Select a claim file to continue.";
   if (resetResult) setStep(1);
 }
 
@@ -187,11 +187,11 @@ function renderError(result) {
   latestResult = result;
   document.getElementById("successBanner").classList.add("error-banner");
   document.getElementById("successBanner").querySelector("strong").textContent = result.code || "PROCESSING ERROR";
-  document.getElementById("resultSource").textContent = result.error || "The document could not be processed.";
+  document.getElementById("resultSource").textContent = result.error || "The claim file could not be processed.";
   document.getElementById("stamp").textContent = "Unable to process";
   document.getElementById("stamp").className = "route-name route-manual";
-  document.getElementById("recommendationSummary").textContent = "Please return to claim intake and submit a supported claim document or image.";
-  document.getElementById("reasoning").textContent = result.error || "The document could not be processed.";
+  document.getElementById("recommendationSummary").textContent = "Please return to claim intake and submit a supported claim file.";
+  document.getElementById("reasoning").textContent = result.error || "The claim file could not be processed.";
   document.getElementById("completenessMetric").textContent = "—";
   document.getElementById("missingMetric").textContent = "0";
   document.getElementById("inconsistencyMetric").textContent = "0";
