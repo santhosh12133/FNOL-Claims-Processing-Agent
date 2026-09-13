@@ -230,11 +230,11 @@ def test_specialist_queue_for_bodily_injury_alias():
     assert route(text)["recommendedRoute"] == "Specialist Queue"
 
 
-def test_manual_review_for_invalid_damage():
+def test_manual_review_for_missing_damage():
     text = CLEAN_DOC.replace("Estimated Damage: $500.00", "Estimated Damage: unknown")
     result = route(text)
     assert result["recommendedRoute"] == "Manual Review"
-    assert result["riskSignals"][0]["code"] == "INVALID_DAMAGE"
+    assert result["riskSignals"][0]["code"] == "MISSING_DATA"
 
 
 def test_manual_review_for_zero_damage():
