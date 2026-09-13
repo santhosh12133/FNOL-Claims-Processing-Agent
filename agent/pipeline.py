@@ -34,6 +34,6 @@ def process_text(text: str, source_name: str = "pasted-input.txt") -> dict:
 
 
 def process_document(filepath: str) -> dict:
-    """Run the full pipeline on a single FNOL document (.txt or .pdf)."""
+    """Run the full pipeline on one PDF or Word (.docx) document."""
     text = read_text_from_file(filepath)
     return process_text(text, source_name=Path(filepath).name)
