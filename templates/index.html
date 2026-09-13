@@ -3,125 +3,154 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="FNOL claims intake, validation, and routing workspace">
-  <title>FNOL Claims Triage</title>
+  <meta name="description" content="FNOL claims intake and explainable routing workflow">
+  <title>FNOL Claims Processing Agent</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='4') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='5') }}">
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
       <div class="brand-mark" aria-hidden="true">FN</div>
       <div>
-        <div class="brand-name">Claims Triage</div>
-        <div class="brand-subtitle">First Notice of Loss · Operations Workspace</div>
+        <div class="brand-name">FNOL Claims Processing Agent</div>
+        <div class="brand-subtitle">First Notice of Loss · Claims Operations</div>
       </div>
     </div>
-    <div class="system-status"><span class="status-dot"></span>Local processing</div>
+    <div class="system-status"><span class="status-dot"></span>Secure document processing</div>
   </header>
 
-  <main class="workspace">
-    <section class="intro">
-      <div>
-        <p class="eyebrow">FNOL PROCESSING AGENT</p>
-        <h1>Review and route a claim</h1>
-        <p class="intro-copy">Upload an FNOL document to extract claim details, surface data-quality issues, and receive an explainable routing recommendation.</p>
+  <main class="app-shell">
+    <nav class="steps" aria-label="Claim processing steps">
+      <div class="step active" id="step1">
+        <span class="step-number">1</span>
+        <span class="step-label">Claim intake</span>
       </div>
-    </section>
+      <div class="step-line" id="stepLine"></div>
+      <div class="step" id="step2">
+        <span class="step-number">2</span>
+        <span class="step-label">Routing decision</span>
+      </div>
+    </nav>
 
-    <div class="desk">
-      <section class="panel intake" aria-label="Claim intake">
-        <div class="panel-heading">
-          <div>
-            <span class="panel-kicker">01</span>
-            <h2>Claim intake</h2>
-          </div>
-          <span class="panel-meta">PDF / WORD</span>
+    <section id="intakePage" class="page page-intake" aria-labelledby="intakeTitle">
+      <div class="page-header">
+        <div>
+          <p class="eyebrow">FNOL PROCESSING AGENT</p>
+          <h1 id="intakeTitle">Claim intake</h1>
+          <p>Upload an FNOL document to extract claim details, surface data-quality issues, and receive an explainable routing recommendation.</p>
         </div>
+      </div>
 
-        <div class="upload-zone" id="uploadZone">
+      <section class="intake-card">
+        <div class="upload-zone" id="uploadZone" tabindex="0" role="button" aria-label="Choose an FNOL document">
           <div class="upload-icon" aria-hidden="true">↑</div>
-          <h3>Upload FNOL document</h3>
-          <p>Drag and drop a document here, or choose a file from your computer.</p>
-          <p class="supported-types">Accepted formats: <strong>PDF</strong> and <strong>Word (.docx)</strong> · Maximum 10 MB</p>
-          <label class="upload-btn upload-btn--primary">
-            Choose document
+          <h2>Upload FNOL document</h2>
+          <p>Drag and drop a PDF or Word document here</p>
+          <span class="or">or</span>
+          <label class="choose-btn">
+            Choose file
             <input type="file" id="fileInput" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
           </label>
+          <p class="supported-types">Accepted formats: <strong>PDF</strong>, <strong>Word (.docx)</strong> <span>•</span> Maximum size: 10 MB</p>
         </div>
 
-        <div class="selected-file" id="selectedFile" hidden>
-          <div class="selected-file__icon" aria-hidden="true">DOC</div>
-          <div class="selected-file__details">
-            <span class="selected-file__label">Selected document</span>
-            <strong id="selectedFileName"></strong>
-          </div>
-          <button id="removeFileBtn" class="remove-file" type="button" aria-label="Remove selected document">×</button>
-        </div>
-
-        <button id="processBtn" class="process-btn" type="button" disabled>Process claim <span aria-hidden="true">→</span></button>
-        <p class="intake-hint" id="fileHint">Only PDF and Word (.docx) documents can be submitted. Files are processed by the FNOL pipeline.</p>
-      </section>
-
-      <section class="panel result" aria-label="Case result">
-        <div class="panel-heading">
+        <div class="support-note">
+          <div class="note-icon" aria-hidden="true">i</div>
           <div>
-            <span class="panel-kicker">02</span>
-            <h2>Routing decision</h2>
+            <strong>Supported documents</strong>
+            <p>Upload only FNOL documents in PDF or Word format (.docx). Other file types are not accepted.</p>
           </div>
-          <span class="panel-meta" id="resultStatus">AWAITING DOCUMENT</span>
         </div>
 
-        <div id="resultEmpty" class="result-empty">
-          <div class="empty-icon" aria-hidden="true">✓</div>
-          <h3>No claim processed</h3>
-          <p>Upload a PDF or Word FNOL document to generate a routing decision.</p>
+        <div id="selectedFile" class="selected-file" hidden>
+          <div class="file-icon" aria-hidden="true">DOC</div>
+          <div class="file-info">
+            <span>Selected document</span>
+            <strong id="selectedFileName"></strong>
+            <small id="fileSize"></small>
+          </div>
+          <button id="removeFileBtn" class="icon-btn" type="button" aria-label="Remove selected document">×</button>
         </div>
 
-        <div id="resultCard" class="result-card" hidden>
-          <div class="result-header">
-            <div>
-              <div class="result-overline">Recommended workflow</div>
-              <span id="sourceFile" class="source-file"></span>
-            </div>
-            <div id="stamp" class="stamp"></div>
-          </div>
+        <div class="intake-footer">
+          <p id="fileHint">Choose a PDF or Word document to continue.</p>
+          <button id="processBtn" class="next-btn" type="button" disabled>Next <span aria-hidden="true">→</span></button>
+        </div>
+      </section>
+    </section>
 
-          <div class="decision-box">
-            <div class="decision-label">Why this route?</div>
-            <p id="reasoning" class="reasoning"></p>
-          </div>
+    <section id="resultPage" class="page page-result" aria-labelledby="resultTitle" hidden>
+      <div class="result-page-header">
+        <div>
+          <p class="eyebrow">FNOL PROCESSING AGENT</p>
+          <h1 id="resultTitle">Routing decision</h1>
+          <p>Extracted claim details, data-quality issues, and the recommended claims workflow.</p>
+        </div>
+        <button id="newDocumentBtn" class="secondary-btn" type="button"><span aria-hidden="true">←</span> Upload another document</button>
+      </div>
 
-          <div id="incidentDescription" class="incident-description" hidden>
-            <div class="incident-description__title">Incident description</div>
-            <p id="incidentDescriptionText" class="incident-description__body"></p>
-          </div>
+      <div id="successBanner" class="success-banner">
+        <div class="success-icon" aria-hidden="true">✓</div>
+        <div>
+          <strong>Document processed successfully</strong>
+          <span id="resultSource"></span>
+        </div>
+      </div>
 
-          <div class="flags-row">
-            <div class="flag-block">
-              <div class="flag-title"><span>Data completeness</span><span id="missingCount" class="count-badge">0</span></div>
-              <ul id="missingList" class="flag-list"></ul>
-            </div>
-            <div class="flag-block">
-              <div class="flag-title"><span>Data quality</span><span id="inconsistencyCount" class="count-badge">0</span></div>
-              <ul id="inconsistencyList" class="flag-list"></ul>
-            </div>
-          </div>
+      <div class="result-card">
+        <div class="recommendation" id="recommendation">
+          <div class="recommendation-icon" aria-hidden="true">⚑</div>
+          <div class="recommendation-label">Routing recommendation</div>
+          <div id="stamp" class="route-name">Manual Review</div>
+          <p id="recommendationSummary">The claim requires review based on the processing rules.</p>
+        </div>
 
-          <div class="fields-title">Extracted claim details</div>
+        <div class="metric-grid">
+          <div class="metric"><span>Completeness</span><strong id="completenessMetric">—</strong></div>
+          <div class="metric"><span>Missing fields</span><strong id="missingMetric">0</strong></div>
+          <div class="metric"><span>Inconsistencies</span><strong id="inconsistencyMetric">0</strong></div>
+          <div class="metric"><span>Risk signals</span><strong id="riskMetric">0</strong></div>
+        </div>
+
+        <div class="result-section rationale-section">
+          <div class="section-heading"><span class="section-icon">≡</span><strong>Rationale</strong></div>
+          <p id="reasoning" class="reasoning"></p>
+        </div>
+
+        <div class="result-section">
+          <div class="section-heading"><span class="section-icon">☷</span><strong>Data quality</strong></div>
+          <div class="quality-grid">
+            <div><span class="quality-label">Missing mandatory fields</span><ul id="missingList" class="flag-list"></ul></div>
+            <div><span class="quality-label">Inconsistencies</span><ul id="inconsistencyList" class="flag-list"></ul></div>
+          </div>
+        </div>
+
+        <div id="incidentDescription" class="result-section incident-section" hidden>
+          <div class="section-heading"><span class="section-icon">▤</span><strong>Incident description</strong></div>
+          <p id="incidentDescriptionText"></p>
+        </div>
+
+        <div class="result-section">
+          <div class="section-heading"><span class="section-icon">▦</span><strong>Extracted claim details</strong></div>
           <div id="fieldsGrid" class="fields-grid"></div>
         </div>
-      </section>
-    </div>
+
+        <div class="result-actions">
+          <button id="backBtn" class="secondary-btn" type="button"><span aria-hidden="true">←</span> Back to claim intake</button>
+          <button id="downloadBtn" class="secondary-btn" type="button"><span aria-hidden="true">↓</span> Download result (JSON)</button>
+        </div>
+      </div>
+    </section>
   </main>
 
   <footer class="footer">
     <span>Deterministic extraction · Validation · Explainable routing</span>
-    <span>PDF / Word intake</span>
+    <span>Built for claims operations</span>
   </footer>
 
-  <script src="{{ url_for('static', filename='app.js', v='4') }}"></script>
+  <script src="{{ url_for('static', filename='app.js', v='5') }}"></script>
 </body>
 </html>
