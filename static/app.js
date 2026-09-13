@@ -83,7 +83,7 @@ function setBusy(isBusy) {
   btn.setAttribute("aria-busy", String(isBusy));
   btn.innerHTML = isBusy
     ? `${processingSpinner()}<span>Processing claim…</span>`
-    : 'Next <span aria-hidden="true">→</span>';
+    : 'Continue <span aria-hidden="true">→</span>';
 }
 
 function setStep(step) {
@@ -142,7 +142,7 @@ function selectFile(file) {
   document.getElementById("fileSize").textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
   document.getElementById("selectedFile").hidden = false;
   document.getElementById("processBtn").disabled = false;
-  document.getElementById("fileHint").textContent = "Claim file selected. Select Next to process the claim.";
+  document.getElementById("fileHint").textContent = "Claim file selected. Select Continue to process the claim.";
   return true;
 }
 
@@ -152,7 +152,7 @@ function clearSelectedFile(resetResult = true) {
   document.getElementById("selectedFile").hidden = true;
   document.getElementById("processBtn").disabled = true;
   document.getElementById("processBtn").setAttribute("aria-busy", "false");
-  document.getElementById("processBtn").innerHTML = 'Next <span aria-hidden="true">→</span>';
+  document.getElementById("processBtn").innerHTML = 'Continue <span aria-hidden="true">→</span>';
   document.getElementById("fileHint").textContent = "Select a claim file to continue.";
   if (resetResult) setStep(1);
 }
@@ -185,13 +185,14 @@ function setIncidentDescription(text) {
 
 function renderError(result) {
   latestResult = result;
+  const message = "The submitted claim file could not be processed. Please review the submission and try again.";
   document.getElementById("successBanner").classList.add("error-banner");
-  document.getElementById("successBanner").querySelector("strong").textContent = result.code || "PROCESSING ERROR";
-  document.getElementById("resultSource").textContent = result.error || "The claim file could not be processed.";
-  document.getElementById("stamp").textContent = "Unable to process";
+  document.getElementById("successBanner").querySelector("strong").textContent = "Unable to process claim";
+  document.getElementById("resultSource").textContent = "Processing was not completed.";
+  document.getElementById("stamp").textContent = "Manual Review";
   document.getElementById("stamp").className = "route-name route-manual";
-  document.getElementById("recommendationSummary").textContent = "Please return to claim intake and submit a supported claim file.";
-  document.getElementById("reasoning").textContent = result.error || "The claim file could not be processed.";
+  document.getElementById("recommendationSummary").textContent = "The claim requires attention before processing can continue.";
+  document.getElementById("reasoning").textContent = message;
   document.getElementById("completenessMetric").textContent = "—";
   document.getElementById("missingMetric").textContent = "0";
   document.getElementById("inconsistencyMetric").textContent = "0";
@@ -211,8 +212,8 @@ function renderResult(result) {
   latestResult = result;
   const banner = document.getElementById("successBanner");
   banner.classList.remove("error-banner");
-  banner.querySelector("strong").textContent = "Document processed successfully";
-  document.getElementById("resultSource").textContent = result.sourceFile || "Processed FNOL document";
+  banner.querySelector("strong").textContent = "Claim processed successfully";
+  document.getElementById("resultSource").textContent = result.sourceFile || "Processed FNOL claim";
 
   const route = result.recommendedRoute || "Manual Review";
   const stamp = document.getElementById("stamp");
@@ -278,7 +279,7 @@ function renderResult(result) {
 async function processSelectedFile() {
   if (!selectedFile) return;
   setBusy(true);
-  document.getElementById("fileHint").textContent = `Processing ${selectedFile.name}… Extracting and validating claim data.`;
+  document.getElementById("fileHint").textContent = `Processing ${selectedFile.name}… Preparing claim information.`;
 
   const formData = new FormData();
   formData.append("file", selectedFile);
