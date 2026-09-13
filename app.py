@@ -2,7 +2,7 @@
 app.py
 ------
 Flask front end and versioned JSON API for the FNOL Claims Processing Agent.
-The web intake accepts PDF and Word (.docx) documents only.
+The web intake accepts TXT, PDF, Word (.docx), and common claim-image files.
 """
 import logging
 import tempfile
@@ -19,7 +19,7 @@ BASE_DIR = Path(__file__).resolve().parent
 SAMPLE_DIR = BASE_DIR / "sample_docs"
 MAX_UPLOAD_SIZE = 10 * 1024 * 1024
 API_VERSION = "v1"
-ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".docx"}
+ALLOWED_UPLOAD_EXTENSIONS = {".txt", ".pdf", ".docx", ".jpg", ".jpeg", ".png", ".webp"}
 
 app = Flask(__name__)
 app.json.sort_keys = False
@@ -104,7 +104,7 @@ def health():
 @app.post("/api/v1/claims/process-upload")
 def process_uploaded_file():
     if "file" not in request.files:
-        return _error("No file uploaded. Please choose a PDF or Word document.", 400, "FILE_MISSING")
+        return _error("No file uploaded. Please choose a supported claim file.", 400, "FILE_MISSING")
 
     upload = request.files["file"]
     original_name = secure_filename(upload.filename or "")
@@ -114,7 +114,7 @@ def process_uploaded_file():
     suffix = Path(original_name).suffix.lower()
     if suffix not in ALLOWED_UPLOAD_EXTENSIONS:
         return _error(
-            "Unsupported file type. Only PDF (.pdf) and Word (.docx) documents are accepted.",
+            "Unsupported file type. Please upload a supported FNOL file.",
             415,
             "UNSUPPORTED_FILE_TYPE",
         )
@@ -128,11 +128,11 @@ def process_uploaded_file():
         result = _process_document_response(tmp_path, original_name)
         return _success(result)
     except (OSError, ValueError, TypeError):
-        return _error("The uploaded FNOL document could not be processed.", 422, "UPLOAD_PROCESSING_ERROR")
+        return _error("The uploaded FNOL file could not be processed.", 422, "UPLOAD_PROCESSING_ERROR")
     except Exception:
         request_id = _request_id()
         logger.exception("Unexpected upload processing error request_id=%s", request_id)
-        return _error("The uploaded document could not be processed due to an internal error.", 500, "INTERNAL_ERROR", request_id)
+        return _error("The uploaded file could not be processed due to an internal error.", 500, "INTERNAL_ERROR", request_id)
     finally:
         if tmp_path is not None:
             try:
@@ -191,8 +191,7 @@ def process_sample(filename):
         return _error("The sample could not be processed due to an internal error.", 500, "INTERNAL_ERROR", request_id)
 
 
-# Kept for API compatibility with existing integrations. The web UI does not
-# expose pasted text; document intake is intentionally PDF/Word only.
+# Kept for API compatibility with existing integrations.
 @app.post("/api/v1/claims/process-text")
 def process_pasted_text():
     data = request.get_json(silent=True)
