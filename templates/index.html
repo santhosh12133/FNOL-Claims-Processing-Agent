@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='10') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='11') }}">
 </head>
 <body>
   <header class="topbar">
@@ -23,16 +23,16 @@
       <div class="step active" id="step1"><span class="step-number">1</span><span class="step-label">Claim intake</span></div><div class="step-line" id="stepLine"></div><div class="step" id="step2"><span class="step-number">2</span><span class="step-label">Routing decision</span></div>
     </nav>
     <section id="intakePage" class="page page-intake" aria-labelledby="intakeTitle">
-      <div class="page-header"><div><p class="eyebrow">CLAIM INTAKE</p><h1 id="intakeTitle">Claim intake</h1><p>Upload a claim document or image to extract claim details, check the data, and determine the next workflow step.</p></div></div>
+      <div class="page-header"><div><p class="eyebrow">CLAIM INTAKE</p><h1 id="intakeTitle">Claim intake</h1><p>Submit claim information for automated intake, validation, and routing.</p></div></div>
       <section class="intake-card">
-        <div class="upload-zone" id="uploadZone" tabindex="0" role="button" aria-label="Choose a claim document or image">
-          <div class="upload-icon" aria-hidden="true">↑</div><h2>Add claim document</h2><p>Drop a document or image here</p><span class="or">or</span>
+        <div class="upload-zone" id="uploadZone" tabindex="0" role="button" aria-label="Choose a claim file">
+          <div class="upload-icon" aria-hidden="true">↑</div><h2>Add claim file</h2><p>Drop your claim file here</p><span class="or">or</span>
           <label class="choose-btn">Choose file<input type="file" id="fileInput" accept=".pdf,.docx,.jpg,.jpeg,.png,.webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,image/webp" hidden></label>
-          <p class="supported-types">PDF, Word, JPG, PNG or WebP <span>•</span> Maximum size: 10 MB</p>
+          <p class="supported-types">Maximum size: 10 MB</p>
         </div>
-        <div class="support-note"><div class="note-icon" aria-hidden="true">i</div><div><strong>Claim document</strong><p>Use a clear FNOL form, scanned claim document, or claim image with the incident details visible.</p></div></div>
-        <div id="selectedFile" class="selected-file" hidden><div class="file-icon" aria-hidden="true">DOC</div><div class="file-info"><span>Selected document</span><strong id="selectedFileName"></strong><small id="fileSize"></small></div><button id="removeFileBtn" class="icon-btn" type="button" aria-label="Remove selected document">×</button></div>
-        <div class="intake-footer"><p id="fileHint">Choose a claim document or image to continue.</p><button id="processBtn" class="next-btn" type="button" disabled>Next <span aria-hidden="true">→</span></button></div>
+        <div class="support-note"><div class="note-icon" aria-hidden="true">i</div><div><strong>Claim file</strong><p>Use a clear FNOL form, scanned claim document, or claim image with the incident details visible.</p></div></div>
+        <div id="selectedFile" class="selected-file" hidden><div class="file-icon" aria-hidden="true">FILE</div><div class="file-info"><span>Selected claim file</span><strong id="selectedFileName"></strong><small id="fileSize"></small></div><button id="removeFileBtn" class="icon-btn" type="button" aria-label="Remove selected claim file">×</button></div>
+        <div class="intake-footer"><p id="fileHint">Select a claim file to continue.</p><button id="processBtn" class="next-btn" type="button" disabled>Next <span aria-hidden="true">→</span></button></div>
       </section>
     </section>
     <section id="resultPage" class="page page-result" aria-labelledby="resultTitle" hidden>
@@ -50,6 +50,6 @@
     </section>
   </main>
   <footer class="footer"><span>Deterministic extraction · Validation · Explainable routing</span><span>Built for claims operations</span></footer>
-  <script src="{{ url_for('static', filename='app.js', v='10') }}"></script>
+  <script src="{{ url_for('static', filename='app.js', v='11') }}"></script>
 </body>
 </html>
