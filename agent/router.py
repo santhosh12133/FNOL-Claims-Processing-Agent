@@ -1,17 +1,12 @@
-"""
-router.py
----------
-Applies the four routing rules from the assessment brief, in a deliberate
-priority order, and returns both the recommended route and a plain-English
-explanation of why.
-"""
+"""Explainable, deterministic FNOL routing with safety-first gates."""
 import re
+from typing import Any
 
 from .extractor import flatten_extracted
 
-FRAUD_KEYWORDS = ["fraud", "inconsistent", "staged"]
-FAST_TRACK_THRESHOLD = 25000.0
-
+FRAUD_KEYWORDS = ("fraud", "fraudulent", "staged", "inconsistent", "fabricated", "fake")
+INJURY_TYPES = {"injury", "bodily injury", "personal injury"}
+FAST_TRACK_THRESHOLD = 25_000.0
 ROUTES = {
     "MANUAL_REVIEW": "Manual Review",
     "INVESTIGATION_FLAG": "Investigation Flag",
@@ -21,95 +16,68 @@ ROUTES = {
 }
 
 
-def _parse_money(value):
-    if not value:
+def _parse_money(value: Any):
+    if value is None or not str(value).strip():
         return None
-    cleaned = re.sub(r"[^\d.]", "", value)
-    if not cleaned:
+    text = str(value).strip().replace(",", "")
+    match = re.search(r"[-+]?\d+(?:\.\d+)?", text)
+    if not match:
         return None
     try:
-        return float(cleaned)
+        return float(match.group())
     except ValueError:
         return None
 
 
-def _fraud_keyword_hits(description: str) -> list:
+def _fraud_keyword_hits(description: Any) -> list[str]:
     if not description:
         return []
-    lowered = description.lower()
-    return [kw for kw in FRAUD_KEYWORDS if kw in lowered]
+    lowered = str(description).lower()
+    return [kw for kw in FRAUD_KEYWORDS if re.search(rf"\b{re.escape(kw)}\b", lowered)]
+
+
+def _normalise_claim_type(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip().lower())
 
 
 def classify_and_route(extracted: dict, missing_fields: list) -> dict:
-    """
-    Priority order (highest to lowest):
-      1. Missing mandatory field(s)                  -> Manual Review
-      2. Fraud-indicator keywords in the description  -> Investigation Flag
-      3. Claim type = injury                          -> Specialist Queue
-      4. Estimated damage < $25,000                   -> Fast-Track
-      5. Otherwise                                     -> Standard Review
+    """Classify a claim using deterministic safety-first routing rules.
 
-    Why this order: a claim can't be safely auto-processed at all if
-    required data is missing, so that gate runs first. Suspected fraud is
-    checked next because it should override convenience routing — a small,
-    cheap claim that looks staged still needs a human, not a fast-track
-    rubber stamp. Injury claims are routed to specialists ahead of the
-    dollar-amount check because bodily-injury exposure isn't well captured
-    by a repair-cost threshold. Only after those three "safety" checks does
-    the dollar amount decide between Fast-Track and Standard Review.
+    Returns the route, human-readable reasoning, and structured risk signals.
     """
     flat = flatten_extracted(extracted)
+    signals = []
 
+    # Incomplete core data must never be auto-routed.
     if missing_fields:
-        return {
-            "recommendedRoute": ROUTES["MANUAL_REVIEW"],
-            "reasoning": (
-                "Routed to Manual Review: the following mandatory field(s) could not "
-                f"be found in the document: {', '.join(missing_fields)}. A claim can't "
-                "be safely auto-processed with incomplete core data."
-            ),
-        }
+        signals.append({"code": "MISSING_DATA", "severity": "high", "details": list(missing_fields)})
+        return {"recommendedRoute": ROUTES["MANUAL_REVIEW"], "reasoning": f"Manual Review is required because mandatory field(s) are missing: {', '.join(missing_fields)}.", "riskSignals": signals}
 
+    # Explicit fraud language overrides convenience routing.
     fraud_hits = _fraud_keyword_hits(flat.get("description"))
     if fraud_hits:
-        return {
-            "recommendedRoute": ROUTES["INVESTIGATION_FLAG"],
-            "reasoning": (
-                "Routed to Investigation Flag: the incident description contains "
-                f"fraud-indicator keyword(s) [{', '.join(fraud_hits)}]. This overrides "
-                "dollar-amount-based routing since suspected fraud needs human review "
-                "regardless of claim size."
-            ),
-        }
+        signals.append({"code": "FRAUD_INDICATOR", "severity": "critical", "details": fraud_hits})
+        return {"recommendedRoute": ROUTES["INVESTIGATION_FLAG"], "reasoning": f"Investigation Flag is recommended because the incident description contains fraud-indicator term(s): {', '.join(fraud_hits)}.", "riskSignals": signals}
 
-    claim_type = (flat.get("claimType") or "").strip().lower()
-    if claim_type == "injury":
-        return {
-            "recommendedRoute": ROUTES["SPECIALIST_QUEUE"],
-            "reasoning": (
-                "Routed to Specialist Queue: claim type is 'Injury'. Bodily injury "
-                "claims carry medical/liability exposure that warrants specialist "
-                "handling regardless of the damage estimate."
-            ),
-        }
+    # Injury exposure requires specialist handling regardless of repair cost.
+    claim_type = _normalise_claim_type(flat.get("claimType"))
+    if claim_type in INJURY_TYPES:
+        signals.append({"code": "INJURY_EXPOSURE", "severity": "high", "details": [claim_type]})
+        return {"recommendedRoute": ROUTES["SPECIALIST_QUEUE"], "reasoning": "Specialist Queue is recommended because the claim involves bodily injury, which may require medical and liability review.", "riskSignals": signals}
 
+    # Never apply the amount threshold to an invalid amount.
     damage = _parse_money(flat.get("estimatedDamage"))
-    if damage is not None and damage < FAST_TRACK_THRESHOLD:
-        return {
-            "recommendedRoute": ROUTES["FAST_TRACK"],
-            "reasoning": (
-                f"Routed to Fast-Track: estimated damage (${damage:,.2f}) is below the "
-                f"${FAST_TRACK_THRESHOLD:,.0f} threshold, with no missing fields, fraud "
-                "indicators, or injury claim type detected."
-            ),
-        }
+    if damage is None or damage < 0:
+        signals.append({"code": "INVALID_DAMAGE", "severity": "high", "details": [flat.get("estimatedDamage")]})
+        return {"recommendedRoute": ROUTES["MANUAL_REVIEW"], "reasoning": "Manual Review is required because the estimated damage cannot be reliably evaluated.", "riskSignals": signals}
 
-    return {
-        "recommendedRoute": ROUTES["STANDARD_REVIEW"],
-        "reasoning": (
-            "Routed to Standard Review: the claim didn't meet the criteria for "
-            f"Fast-Track (damage at/above ${FAST_TRACK_THRESHOLD:,.0f}), Specialist "
-            "Queue, Manual Review, or Investigation Flag, so it goes to a standard "
-            "adjuster queue."
-        ),
-    }
+    if damage == 0:
+        signals.append({"code": "ZERO_DAMAGE", "severity": "medium", "details": [damage]})
+        return {"recommendedRoute": ROUTES["MANUAL_REVIEW"], "reasoning": "Manual Review is recommended because the estimated damage is $0.00 and needs confirmation.", "riskSignals": signals}
+
+    if damage < FAST_TRACK_THRESHOLD:
+        signals.append({"code": "LOW_DAMAGE", "severity": "low", "details": [damage]})
+        return {"recommendedRoute": ROUTES["FAST_TRACK"], "reasoning": f"Fast-Track is recommended because estimated damage (${damage:,.2f}) is below the ${FAST_TRACK_THRESHOLD:,.0f} threshold and no higher-priority risk signal was found.", "riskSignals": signals}
+
+    signals.append({"code": "ABOVE_FAST_TRACK_THRESHOLD", "severity": "medium", "details": [damage]})
+    return {"recommendedRoute": ROUTES["STANDARD_REVIEW"], "reasoning": f"Standard Review is recommended because estimated damage (${damage:,.2f}) is at or above the ${FAST_TRACK_THRESHOLD:,.0f} Fast-Track threshold and no higher-priority risk was found.", "riskSignals": signals}
