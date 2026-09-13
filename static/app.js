@@ -7,6 +7,8 @@ const ROUTE_CLASS = {
 };
 
 const API_BASE = "/api/v1";
+const ALLOWED_EXTENSIONS = [".pdf", ".docx"];
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 const CATEGORY_LABELS = {
   policyInformation: "Policy Information",
@@ -32,12 +34,7 @@ const FIELD_ORDER = {
   otherMandatoryFields: ["claimType", "attachments", "initialEstimate"],
 };
 
-const STACKED_FIELD_KEYS = new Set([
-  "location",
-  "thirdParties",
-  "contactDetails",
-  "attachments",
-]);
+const STACKED_FIELD_KEYS = new Set(["location", "thirdParties", "contactDetails", "attachments"]);
 
 const FIELD_LABELS = {
   policyNumber: "Policy Number",
@@ -46,7 +43,6 @@ const FIELD_LABELS = {
   date: "Date",
   time: "Time",
   location: "Location",
-  description: "Description",
   claimant: "Claimant",
   thirdParties: "Third Parties",
   contactDetails: "Contact Details",
@@ -58,11 +54,12 @@ const FIELD_LABELS = {
   initialEstimate: "Initial Estimate",
 };
 
+let selectedFile = null;
+
 async function fetchJSON(url, options) {
   try {
     const res = await fetch(url, options);
     const body = await res.json().catch(() => ({}));
-
     if (!res.ok || body.success === false) {
       const error = body.error || {};
       return {
@@ -71,12 +68,10 @@ async function fetchJSON(url, options) {
         requestId: typeof error === "object" ? error.requestId : null,
       };
     }
-
-    // v1 endpoints wrap payloads in { success, data }.
     return body.success === true && "data" in body ? body.data : body;
   } catch (_error) {
     return {
-      error: "Unable to reach the local claims processor. Check that the Flask app is running.",
+      error: "Unable to reach the FNOL claims processor. Please try again.",
       code: "NETWORK_ERROR",
     };
   }
@@ -84,7 +79,7 @@ async function fetchJSON(url, options) {
 
 function setBusy(isBusy) {
   const btn = document.getElementById("processBtn");
-  btn.disabled = isBusy;
+  btn.disabled = isBusy || !selectedFile;
   btn.innerHTML = isBusy ? "Processing…" : 'Process claim <span aria-hidden="true">→</span>';
 }
 
@@ -92,50 +87,49 @@ function setStatus(text) {
   document.getElementById("resultStatus").textContent = text;
 }
 
-async function loadSamples() {
-  const samples = await fetchJSON(`${API_BASE}/samples`);
-  const row = document.getElementById("sampleRow");
-  row.innerHTML = "";
-  if (samples.error) {
-    document.getElementById("fileHint").textContent = samples.error;
-    return;
-  }
-  samples.forEach((sample) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "sample-pill";
-    btn.textContent = sample.label;
-    btn.title = sample.filename;
-    btn.addEventListener("click", () => onSampleClick(sample));
-    row.appendChild(btn);
-  });
+function getExtension(filename) {
+  const name = (filename || "").toLowerCase();
+  const dot = name.lastIndexOf(".");
+  return dot >= 0 ? name.slice(dot) : "";
 }
 
-async function onSampleClick(sample) {
-  const textInput = document.getElementById("textInput");
-  const fileHint = document.getElementById("fileHint");
-  setBusy(true);
-  setStatus("PROCESSING");
-
-  try {
-    if (sample.isPdf) {
-      textInput.value = "";
-      fileHint.textContent = `Loaded: ${sample.filename} (PDF processed directly)`;
-    } else {
-      const data = await fetchJSON(`${API_BASE}/samples/${encodeURIComponent(sample.filename)}/text`);
-      if (data.error) {
-        renderError(data);
-        return;
-      }
-      textInput.value = data.text || "";
-      fileHint.textContent = `Loaded: ${sample.filename}`;
-    }
-
-    const result = await fetchJSON(`${API_BASE}/claims/process-sample/${encodeURIComponent(sample.filename)}`, { method: "POST" });
-    renderResult(result);
-  } finally {
-    setBusy(false);
+function validateFile(file) {
+  const extension = getExtension(file.name);
+  if (!ALLOWED_EXTENSIONS.includes(extension)) {
+    return "Unsupported file type. Please choose a PDF (.pdf) or Word (.docx) document.";
   }
+  if (file.size > MAX_FILE_SIZE) {
+    return "File is too large. The maximum supported size is 10 MB.";
+  }
+  return null;
+}
+
+function selectFile(file) {
+  const error = validateFile(file);
+  if (error) {
+    selectedFile = null;
+    document.getElementById("selectedFile").hidden = true;
+    document.getElementById("processBtn").disabled = true;
+    document.getElementById("fileHint").textContent = error;
+    setStatus("INVALID FILE");
+    return false;
+  }
+
+  selectedFile = file;
+  document.getElementById("selectedFileName").textContent = file.name;
+  document.getElementById("selectedFile").hidden = false;
+  document.getElementById("processBtn").disabled = false;
+  document.getElementById("fileHint").textContent = `${file.name} selected. Ready to process.`;
+  return true;
+}
+
+function clearSelectedFile() {
+  selectedFile = null;
+  document.getElementById("fileInput").value = "";
+  document.getElementById("selectedFile").hidden = true;
+  document.getElementById("processBtn").disabled = true;
+  document.getElementById("fileHint").textContent = "Only PDF and Word (.docx) documents can be submitted. Files are processed by the FNOL pipeline.";
+  setStatus("AWAITING DOCUMENT");
 }
 
 function fillList(elementId, items) {
@@ -152,6 +146,7 @@ function fillList(elementId, items) {
     el.appendChild(li);
     return;
   }
+
   items.forEach((item) => {
     const li = document.createElement("li");
     li.textContent = FIELD_LABELS[item] || item;
@@ -171,7 +166,7 @@ function renderError(result) {
   document.getElementById("resultEmpty").hidden = true;
   document.getElementById("resultCard").hidden = false;
   document.getElementById("sourceFile").textContent = result.code || "PROCESSING ERROR";
-  document.getElementById("reasoning").textContent = result.error || "The claim could not be processed.";
+  document.getElementById("reasoning").textContent = result.error || "The document could not be processed.";
   document.getElementById("stamp").textContent = "Unable to process";
   document.getElementById("stamp").className = "stamp route-manual";
   setIncidentDescription("");
@@ -188,8 +183,7 @@ function renderResult(result) {
   }
 
   document.getElementById("resultEmpty").hidden = true;
-  const card = document.getElementById("resultCard");
-  card.hidden = false;
+  document.getElementById("resultCard").hidden = false;
   setStatus("DECISION READY");
 
   const stamp = document.getElementById("stamp");
@@ -224,9 +218,7 @@ function renderResult(result) {
     fieldCard.appendChild(title);
 
     const schemaOrder = FIELD_ORDER[category];
-    const orderedFields = schemaOrder
-      ? schemaOrder.filter((key) => key in fields)
-      : Object.keys(fields);
+    const orderedFields = schemaOrder ? schemaOrder.filter((key) => key in fields) : Object.keys(fields);
 
     orderedFields.forEach((key) => {
       const value = fields[key];
@@ -251,46 +243,58 @@ function renderResult(result) {
   });
 }
 
-document.getElementById("processBtn").addEventListener("click", async () => {
-  const text = document.getElementById("textInput").value.trim();
-  if (!text) {
-    renderError({ error: "Paste an FNOL document or select a sample before processing.", code: "EMPTY_INPUT" });
-    return;
-  }
+async function processSelectedFile() {
+  if (!selectedFile) return;
 
   setBusy(true);
   setStatus("PROCESSING");
-  try {
-    const result = await fetchJSON(`${API_BASE}/claims/process-text`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    });
-    document.getElementById("fileHint").textContent = result.error ? result.error : "Processed pasted text";
-    renderResult(result);
-  } finally {
-    setBusy(false);
-  }
-});
-
-document.getElementById("fileInput").addEventListener("change", async (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  setBusy(true);
-  setStatus("PROCESSING");
-  document.getElementById("fileHint").textContent = `Uploading: ${file.name}`;
+  document.getElementById("fileHint").textContent = `Processing: ${selectedFile.name}`;
 
   const formData = new FormData();
-  formData.append("file", file);
+  formData.append("file", selectedFile);
+
   try {
-    const result = await fetchJSON(`${API_BASE}/claims/process-upload`, { method: "POST", body: formData });
-    document.getElementById("fileHint").textContent = result.error ? result.error : `Processed: ${file.name}`;
+    const result = await fetchJSON(`${API_BASE}/claims/process-upload`, {
+      method: "POST",
+      body: formData,
+    });
+    document.getElementById("fileHint").textContent = result.error || `Processed: ${selectedFile.name}`;
     renderResult(result);
   } finally {
     setBusy(false);
-    event.target.value = "";
   }
+}
+
+const fileInput = document.getElementById("fileInput");
+const uploadZone = document.getElementById("uploadZone");
+
+fileInput.addEventListener("change", (event) => {
+  const file = event.target.files[0];
+  if (file) selectFile(file);
 });
 
-loadSamples();
+document.getElementById("processBtn").addEventListener("click", processSelectedFile);
+document.getElementById("removeFileBtn").addEventListener("click", clearSelectedFile);
+
+["dragenter", "dragover"].forEach((eventName) => {
+  uploadZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    uploadZone.classList.add("upload-zone--active");
+  });
+});
+
+["dragleave", "drop"].forEach((eventName) => {
+  uploadZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    uploadZone.classList.remove("upload-zone--active");
+  });
+});
+
+uploadZone.addEventListener("drop", (event) => {
+  const file = event.dataTransfer.files[0];
+  if (file) selectFile(file);
+});
+
+uploadZone.addEventListener("click", (event) => {
+  if (!event.target.closest("label")) fileInput.click();
+});
