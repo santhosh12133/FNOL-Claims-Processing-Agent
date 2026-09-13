@@ -7,17 +7,23 @@
   <title>FNOL Claims Processing Agent</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.gstatic.com" rel="preconnect">
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='14') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='15') }}">
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
       <div class="brand-mark" aria-hidden="true">FN</div>
-      <div><div class="brand-name">FNOL Claims Processing Agent</div><div class="brand-subtitle">First Notice of Loss · Claims Operations</div></div>
+      <div class="brand-copy">
+        <div class="brand-name">FNOL Claims Processing Agent</div>
+        <div class="brand-subtitle">First Notice of Loss · Claims Operations</div>
+      </div>
     </div>
-    <div class="system-status"><span class="status-dot"></span>Secure claim processing</div>
+    <div class="header-meta">
+      <span class="header-label">Claims Operations</span>
+      <span class="header-divider" aria-hidden="true"></span>
+      <div class="system-status"><span class="status-dot"></span>Secure claim processing</div>
+    </div>
   </header>
   <main class="app-shell">
     <nav class="steps" aria-label="Claim processing steps">
@@ -50,7 +56,10 @@
       </div>
     </section>
   </main>
-  <footer class="footer"><span>Deterministic extraction · Validation · Explainable routing</span><span>Built for claims operations</span></footer>
+  <footer class="footer">
+    <div class="footer-brand"><span class="footer-mark" aria-hidden="true">FN</span><div><strong>FNOL Claims Processing Agent</strong><span>Deterministic extraction · Validation · Explainable routing</span></div></div>
+    <div class="footer-meta"><span>Claims Operations</span><span class="footer-separator" aria-hidden="true">·</span><span>Secure processing workflow</span></div>
+  </footer>
   <script src="{{ url_for('static', filename='app.js', v='14') }}"></script>
 </body>
 </html>
