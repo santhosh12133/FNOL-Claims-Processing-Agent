@@ -163,13 +163,13 @@ def test_non_numeric_damage_flagged():
 def test_negative_damage_flagged():
     text = CLEAN_DOC.replace("Estimated Damage: $500.00", "Estimated Damage: -$500.00")
     issues = find_inconsistencies(extract_fields(text))
-    assert any("zero or negative" in issue for issue in issues)
+    assert any("greater than zero" in issue for issue in issues)
 
 
 def test_zero_initial_estimate_flagged():
     text = CLEAN_DOC.replace("Initial Estimate: $500.00", "Initial Estimate: $0.00")
     issues = find_inconsistencies(extract_fields(text))
-    assert any("Initial Estimate" in issue and "zero or negative" in issue for issue in issues)
+    assert any("Initial estimate" in issue and "greater than zero" in issue for issue in issues)
 
 
 def test_large_estimate_discrepancy_is_reported():
