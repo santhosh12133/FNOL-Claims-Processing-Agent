@@ -57,14 +57,36 @@ const FIELD_LABELS = {
 };
 
 async function fetchJSON(url, options) {
-  const res = await fetch(url, options);
-  return res.json();
+  try {
+    const res = await fetch(url, options);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { error: data.error || `Request failed (${res.status}).`, code: data.code || "REQUEST_ERROR" };
+    }
+    return data;
+  } catch (error) {
+    return { error: "Unable to reach the local claims processor. Check that the Flask app is running.", code: "NETWORK_ERROR" };
+  }
+}
+
+function setBusy(isBusy) {
+  const btn = document.getElementById("processBtn");
+  btn.disabled = isBusy;
+  btn.innerHTML = isBusy ? "Processing…" : 'Process claim <span aria-hidden="true">→</span>';
+}
+
+function setStatus(text) {
+  document.getElementById("resultStatus").textContent = text;
 }
 
 async function loadSamples() {
   const samples = await fetchJSON("/api/samples");
   const row = document.getElementById("sampleRow");
   row.innerHTML = "";
+  if (samples.error) {
+    document.getElementById("fileHint").textContent = samples.error;
+    return;
+  }
   samples.forEach((sample) => {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -79,27 +101,41 @@ async function loadSamples() {
 async function onSampleClick(sample) {
   const textInput = document.getElementById("textInput");
   const fileHint = document.getElementById("fileHint");
+  setBusy(true);
+  setStatus("PROCESSING");
 
-  if (sample.isPdf) {
-    textInput.value = "";
-    fileHint.textContent = `Loaded: ${sample.filename} (PDF — processed directly, no text preview)`;
-  } else {
-    const data = await fetchJSON(`/api/sample-text/${sample.filename}`);
-    textInput.value = data.text || "";
-    fileHint.textContent = `Loaded: ${sample.filename}`;
+  try {
+    if (sample.isPdf) {
+      textInput.value = "";
+      fileHint.textContent = `Loaded: ${sample.filename} (PDF processed directly)`;
+    } else {
+      const data = await fetchJSON(`/api/sample-text/${encodeURIComponent(sample.filename)}`);
+      if (data.error) {
+        renderResult(data);
+        return;
+      }
+      textInput.value = data.text || "";
+      fileHint.textContent = `Loaded: ${sample.filename}`;
+    }
+
+    const result = await fetchJSON(`/api/process-sample/${encodeURIComponent(sample.filename)}`);
+    renderResult(result);
+  } finally {
+    setBusy(false);
   }
-
-  const result = await fetchJSON(`/api/process-sample/${sample.filename}`);
-  renderResult(result);
 }
 
 function fillList(elementId, items) {
   const el = document.getElementById(elementId);
   el.innerHTML = "";
-  if (!items || items.length === 0) {
+  const count = Array.isArray(items) ? items.length : 0;
+  const countId = elementId === "missingList" ? "missingCount" : "inconsistencyCount";
+  document.getElementById(countId).textContent = count;
+
+  if (count === 0) {
     const li = document.createElement("li");
     li.className = "flag-list__none";
-    li.textContent = "None";
+    li.textContent = "No issues found";
     el.appendChild(li);
     return;
   }
@@ -114,43 +150,45 @@ function setIncidentDescription(text) {
   const container = document.getElementById("incidentDescription");
   const body = document.getElementById("incidentDescriptionText");
   const value = (text || "").trim();
-
   body.textContent = value;
   container.hidden = !value;
 }
 
-function renderResult(result) {
+function renderError(result) {
   document.getElementById("resultEmpty").hidden = true;
-  const card = document.getElementById("resultCard");
-  card.hidden = false;
+  document.getElementById("resultCard").hidden = false;
+  document.getElementById("sourceFile").textContent = result.code || "PROCESSING ERROR";
+  document.getElementById("reasoning").textContent = result.error || "The claim could not be processed.";
+  document.getElementById("stamp").textContent = "Unable to process";
+  document.getElementById("stamp").className = "stamp route-manual";
+  setIncidentDescription("");
+  fillList("missingList", []);
+  fillList("inconsistencyList", []);
+  document.getElementById("fieldsGrid").innerHTML = "";
+  setStatus("ERROR");
+}
 
-  const stamp = document.getElementById("stamp");
-
-  if (result.error) {
-    document.getElementById("sourceFile").textContent = "Error";
-    document.getElementById("reasoning").textContent = result.error;
-    setIncidentDescription("");
-    stamp.textContent = "";
-    stamp.className = "stamp";
-    fillList("missingList", []);
-    fillList("inconsistencyList", []);
-    document.getElementById("fieldsGrid").innerHTML = "";
+function renderResult(result) {
+  if (result.error && !result.recommendedRoute) {
+    renderError(result);
     return;
   }
 
-  document.getElementById("sourceFile").textContent = result.sourceFile;
+  document.getElementById("resultEmpty").hidden = true;
+  const card = document.getElementById("resultCard");
+  card.hidden = false;
+  setStatus("DECISION READY");
 
-  stamp.textContent = result.recommendedRoute;
-  stamp.className = "stamp " + (ROUTE_CLASS[result.recommendedRoute] || "route-standard");
-  // restart the CSS animation on every new result
+  const stamp = document.getElementById("stamp");
+  document.getElementById("sourceFile").textContent = result.sourceFile || "Processed claim";
+  stamp.textContent = result.recommendedRoute || "Review Required";
+  stamp.className = "stamp " + (ROUTE_CLASS[result.recommendedRoute] || "route-manual");
   stamp.classList.remove("stamp--animate");
   void stamp.offsetWidth;
   stamp.classList.add("stamp--animate");
 
-  document.getElementById("reasoning").textContent = result.reasoning;
-
+  document.getElementById("reasoning").textContent = result.reasoning || "No routing explanation was returned.";
   setIncidentDescription(result.extractedFields?.incidentInformation?.description);
-
   fillList("missingList", result.missingFields);
   fillList("inconsistencyList", result.inconsistencies);
 
@@ -181,9 +219,7 @@ function renderResult(result) {
       const value = fields[key];
       const row = document.createElement("div");
       row.className = "field-row";
-      if (STACKED_FIELD_KEYS.has(key)) {
-        row.classList.add("field-row--stacked");
-      }
+      if (STACKED_FIELD_KEYS.has(key)) row.classList.add("field-row--stacked");
 
       const label = document.createElement("span");
       label.className = "field-row__label";
@@ -204,25 +240,44 @@ function renderResult(result) {
 
 document.getElementById("processBtn").addEventListener("click", async () => {
   const text = document.getElementById("textInput").value.trim();
-  if (!text) return;
-  const result = await fetchJSON("/api/process-text", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
-  });
-  document.getElementById("fileHint").textContent = "Processed pasted text";
-  renderResult(result);
+  if (!text) {
+    renderError({ error: "Paste an FNOL document or select a sample before processing.", code: "EMPTY_INPUT" });
+    return;
+  }
+
+  setBusy(true);
+  setStatus("PROCESSING");
+  try {
+    const result = await fetchJSON("/api/process-text", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    document.getElementById("fileHint").textContent = result.error ? result.error : "Processed pasted text";
+    renderResult(result);
+  } finally {
+    setBusy(false);
+  }
 });
 
 document.getElementById("fileInput").addEventListener("change", async (event) => {
   const file = event.target.files[0];
   if (!file) return;
-  document.getElementById("fileHint").textContent = `Uploaded: ${file.name}`;
+
+  setBusy(true);
+  setStatus("PROCESSING");
+  document.getElementById("fileHint").textContent = `Uploading: ${file.name}`;
 
   const formData = new FormData();
   formData.append("file", file);
-  const result = await fetchJSON("/api/process-upload", { method: "POST", body: formData });
-  renderResult(result);
+  try {
+    const result = await fetchJSON("/api/process-upload", { method: "POST", body: formData });
+    document.getElementById("fileHint").textContent = result.error ? result.error : `Processed: ${file.name}`;
+    renderResult(result);
+  } finally {
+    setBusy(false);
+    event.target.value = "";
+  }
 });
 
 loadSamples();
