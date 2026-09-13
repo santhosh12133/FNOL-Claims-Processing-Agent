@@ -1,359 +1,421 @@
 # FNOL Claims Processing Agent
 
-A lightweight agent that reads First Notice of Loss (FNOL) documents, extracts
-key fields, flags missing or inconsistent data, and routes each claim to the
-correct workflow with a plain-English explanation — available as both a CLI
-and a browser-based triage desk.
+> **Deterministic insurance-claims triage from First Notice of Loss (FNOL) documents.**
 
-Built for the **"Autonomous Insurance Claims Processing Agent"** assessment brief.
+A lightweight, explainable claims-processing pipeline that accepts `.txt` and `.pdf` FNOL documents, extracts structured claim data, validates completeness and consistency, detects routing risks, and recommends the appropriate workflow.
 
----
+**Built for:** the *Autonomous Insurance Claims Processing Agent* assessment brief.
 
-## Table of Contents
+## Why this project is worth reviewing
 
-- [Quick Start](#quick-start)
-- [Approach](#approach)
-- [Project Structure](#project-structure)
-- [Setup](#setup)
-- [Usage: Command Line](#usage-command-line)
-- [Usage: Web UI](#usage-web-ui)
-- [Web API Reference](#web-api-reference)
-- [Output Format](#output-format)
-- [Routing Rules & Precedence](#routing-rules--precedence)
-- [Design Decisions & Assumptions](#design-decisions--assumptions)
-- [Sample Documents](#sample-documents)
-- [Testing](#testing)
-- [Limitations & Future Improvements](#limitations--future-improvements)
-- [Deployment](#deployment)
-- [Demo Video](#demo-video)
+- **End-to-end:** document intake → extraction → validation → risk signals → routing → JSON/API/UI.
+- **Explainable:** every route is produced by explicit, testable business rules rather than an opaque model decision.
+- **Offline by design:** no database, paid API, model key, or external service is required to run the core pipeline.
+- **Production-minded:** versioned API, consistent error contracts, upload limits, safe filenames, request IDs, and temporary-file cleanup.
+- **Recruiter-friendly:** includes sample claims covering normal cases, missing data, fraud indicators, injury, threshold routing, conflicting signals, inconsistent dates, and PDF input.
 
 ---
 
-## Quick Start
+## 2-minute demo
+
+### 1. Install
 
 ```bash
-git clone <your-repo-url> && cd fnol-claims-agent
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+git clone https://github.com/santhosh12133/FNOL-Claims-Processing-Agent.git
+cd FNOL-Claims-Processing-Agent
+python -m venv .venv
 
-pytest -v                                            # 23 tests, all passing
-python main.py sample_docs/fnol_01_fast_track.txt    # CLI, single document
-python app.py                                        # Web UI → http://localhost:5000
-```
+# Windows
+.venv\\Scripts\\activate
 
----
+# macOS / Linux
+# source .venv/bin/activate
 
-## Approach
-
-The pipeline has three stages, each in its own module under `agent/`, wired
-together by a fourth:
-
-```
-document (.txt / .pdf)
-        │
-        ▼
-  extractor.py   →  pulls fields via a label-based regex (FIELD_SCHEMA)
-        │
-        ▼
-  validator.py   →  flags missing mandatory fields + data-quality inconsistencies
-        │
-        ▼
-  router.py      →  applies the 4 routing rules in priority order, explains why
-        │
-        ▼
-  pipeline.py    →  assembles the final JSON result
-```
-
-| Module | Responsibility |
-|---|---|
-| `extractor.py` | Loads raw text (plain read for `.txt`, `pdfplumber` for `.pdf`), then uses one regex built from a label schema to find every `"Label: value"` pair and capture its value up to the next recognized label. Works identically for both formats once PDF text is flattened to a string. |
-| `validator.py` | Determines which mandatory fields are missing, and runs a small set of consistency checks (unparseable dates/amounts, loss date outside the policy's effective period, unrecognized claim type). |
-| `router.py` | Applies the four routing rules from the brief in a specific priority order (see [below](#routing-rules--precedence)) and returns a human-readable reason for the decision. |
-| `pipeline.py` | Ties the above together (`process_document` for files, `process_text` for in-memory text) into the JSON shape the brief requires. |
-
-**Why deterministic rules instead of an LLM call.** For structured/semi-structured
-intake documents like FNOL forms, a regex/rule-based extractor is faster, free,
-fully offline, and — critically for a *routing* decision — 100% explainable and
-testable: every decision traces back to a specific rule, not a model's judgment
-call. The brief notes AI tools are encouraged for *building* the solution, which
-was used here for scaffolding and review; the *runtime* pipeline was deliberately
-kept free of API dependencies so it behaves identically regardless of network
-access or API keys. See [Limitations & Future Improvements](#limitations--future-improvements)
-for how an LLM-assisted fallback could extend this for unstructured free text.
-
----
-
-## Project Structure
-
-```
-fnol-claims-agent/
-├── agent/                      # Core pipeline (no CLI/web concerns live here)
-│   ├── extractor.py             # Field extraction (FIELD_SCHEMA, regex)
-│   ├── validator.py             # Missing-field + inconsistency checks
-│   ├── router.py                 # Routing rules, precedence, reasoning
-│   └── pipeline.py               # Orchestrates the above into one result
-├── main.py                     # CLI entry point
-├── app.py                      # Flask web app (thin wrapper over agent/)
-├── templates/index.html          # Web UI page
-├── static/style.css              # Web UI styling
-├── static/app.js                  # Web UI behavior
-├── sample_docs/                # 8 dummy FNOL documents (7 .txt, 1 .pdf)
-├── scripts/generate_sample_pdf.py  # Regenerates the PDF sample
-├── tests/test_agent.py         # 23 tests: extraction, validation, routing
-├── output/                     # JSON results land here with --save
-├── requirements.txt
-├── DEMO_SCRIPT.md               # Script for the walkthrough video
-└── README.md
-```
-
----
-
-## Setup
-
-```bash
-python3 -m venv .venv && source .venv/bin/activate   # optional but recommended
 pip install -r requirements.txt
 ```
 
-`requirements.txt` covers the CLI, the test suite, and the web UI (Flask) —
-one install gets you everything.
-
----
-
-## Usage: Command Line
-
-Process a single document:
-```bash
-python main.py sample_docs/fnol_01_fast_track.txt
-```
-
-Process every sample document and print a summary:
-```bash
-python main.py --batch sample_docs/
-```
-
-Same, but also write each result as JSON into `output/`:
-```bash
-python main.py --batch sample_docs/ --save
-```
-
----
-
-## Usage: Web UI
-
-```bash
-python app.py
-```
-
-Open **http://localhost:5000**. From there you can:
-
-- Click a sample button to load and instantly process one of the 8 sample documents
-- Paste your own FNOL text into the box and click **Process Claim**
-- Upload your own `.txt` / `.pdf` file directly
-
-The recommended route renders as a color-coded stamp — green (Fast-Track),
-blue (Standard Review), purple (Specialist Queue), red (Investigation Flag),
-amber (Manual Review) — alongside the reasoning, missing fields,
-inconsistencies, and the full extracted-field breakdown, grouped the same way
-as the brief's own field categories.
-
-This runs on `localhost` only — see [Deployment](#deployment) if you want it
-reachable outside your own machine.
-
----
-
-## Web API Reference
-
-The web UI is a thin client over these JSON endpoints — useful if you want to
-script against it directly instead of using the browser:
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/` | Serves the triage desk page |
-| `GET` | `/api/samples` | Lists all sample documents with display labels |
-| `GET` | `/api/sample-text/<filename>` | Returns the raw text of a `.txt` sample (for the textarea preview) |
-| `GET` | `/api/process-sample/<filename>` | Runs the full pipeline on a sample document, returns the result JSON |
-| `POST` | `/api/process-text` | Body: `{"text": "..."}` — processes pasted/raw text |
-| `POST` | `/api/process-upload` | Multipart form, field `file` — processes an uploaded `.txt`/`.pdf` |
-
-All endpoints return `400` with `{"error": "..."}` for bad input (empty text,
-unsupported file type, unknown sample) rather than a raw stack trace.
-
----
-
-## Output Format
-
-Matches the brief's required shape, plus one addition (`inconsistencies`,
-explained in [Design Decisions](#design-decisions--assumptions)):
-
-```json
-{
-  "sourceFile": "fnol_03_fraud_flag.txt",
-  "extractedFields": {
-    "policyInformation": { "...": "..." },
-    "incidentInformation": { "...": "..." },
-    "involvedParties": { "...": "..." },
-    "assetDetails": { "...": "..." },
-    "otherMandatoryFields": { "...": "..." }
-  },
-  "missingFields": [],
-  "inconsistencies": [],
-  "recommendedRoute": "Investigation Flag",
-  "reasoning": "Routed to Investigation Flag: ..."
-}
-```
-
-`extractedFields` is nested by category — matching the brief's own field
-grouping — rather than one flat object, since that structure is easier for a
-downstream reviewer scanning the JSON to reason about.
-
----
-
-## Routing Rules & Precedence
-
-The brief gives four rules but doesn't specify what happens when more than one
-applies to the same claim (e.g. a cheap claim that also looks fraudulent).
-This is resolved by applying them in the following order, highest priority first:
-
-| Order | Rule | Route |
-|---|---|---|
-| 1 | Any mandatory field missing | **Manual Review** |
-| 2 | Description contains a fraud-indicator keyword (`fraud`, `inconsistent`, `staged`) | **Investigation Flag** |
-| 3 | Claim type = `Injury` | **Specialist Queue** |
-| 4 | Estimated damage < $25,000 | **Fast-Track** |
-| 5 | None of the above | **Standard Review** *(fallback, not in the original brief)* |
-
-**Why this order:** incomplete data blocks *any* automated decision, so it's
-checked first. Suspected fraud is checked before the dollar-amount rule on
-purpose — a small, "fast-track-sized" claim that looks staged should still go
-to Investigation, not get rubber-stamped for being cheap. Injury claims are
-pulled out next because bodily-injury exposure isn't well-represented by a
-repair-cost number. Only after those three checks does the $25,000 threshold
-decide between Fast-Track and a default Standard Review queue for larger,
-otherwise-clean claims (the brief doesn't say what to do above the threshold,
-so this catch-all was added rather than leaving those claims unrouted).
-
-`sample_docs/fnol_06_multiple_flags.txt` is a deliberate stress test: missing
-fields **and** a fraud keyword **and** an injury claim type **and** damage
-under $25,000 — all four conditions at once — proving Manual Review wins as
-intended. See `tests/test_agent.py::test_precedence_missing_field_beats_everything_else`.
-
----
-
-## Design Decisions & Assumptions
-
-- **What counts as "mandatory."** The brief's last field category is literally
-  named "Other Mandatory Fields" (Claim Type, Attachments, Initial Estimate).
-  Those three are kept, plus Policy Number, Policyholder Name, Date of Loss,
-  Location, and Estimated Damage — because a routing decision can't be made
-  without them (no damage figure means the $25k rule can't run; no description
-  means the fraud-keyword check can't run). Fields like Time of Loss,
-  Effective Dates, Third Parties, Contact Details, and Asset Type/ID are still
-  extracted and reported, just not treated as blocking.
-- **Placeholder values.** A value that's literally `N/A`, `None`, `Unknown`,
-  `-`, etc. is treated the same as if the field were absent — a form that says
-  "Third Parties: N/A" hasn't actually told you anything.
-- **Inconsistencies don't block routing on their own.** The brief's four
-  routing rules don't include an "inconsistent data" rule, so rather than
-  inventing new routing behavior, inconsistencies (e.g. a loss date outside
-  the policy's effective period) are surfaced in a separate `inconsistencies`
-  list and appended to the reasoning for a human to see, without silently
-  overriding the specified rules. `fnol_07_inconsistent_dates.txt` demonstrates
-  this: the policy had already expired when the loss occurred, which is
-  flagged, but the claim still routes to Fast-Track per the stated rules since
-  damage is low and nothing else is wrong.
-- **Extraction is label-based** — it looks for `"Field Name: value"` patterns,
-  matching how FNOL intake forms and structured emails are usually laid out
-  (including the ACORD Automobile Loss Notice fields this brief is modeled
-  on). It won't work well on a free-text narrative with no labels — see
-  [Limitations](#limitations--future-improvements).
-
----
-
-## Sample Documents
-
-`sample_docs/` has 8 dummy FNOL documents (more than the 3–5 requested, for
-full coverage of every rule plus edge cases) — 7 `.txt` and 1 `.pdf`
-(generated by `scripts/generate_sample_pdf.py`, using an original layout
-rather than reproducing any insurer's copyrighted form):
-
-| File | Demonstrates |
-|---|---|
-| `fnol_01_fast_track.txt` | Clean claim, low damage → Fast-Track |
-| `fnol_02_missing_fields.txt` | Missing mandatory fields → Manual Review |
-| `fnol_03_fraud_flag.txt` | Fraud keywords in description → Investigation Flag |
-| `fnol_04_injury.txt` | Claim type = Injury → Specialist Queue |
-| `fnol_05_standard_review.txt` | Clean claim above $25k → Standard Review |
-| `fnol_06_multiple_flags.txt` | All four rules apply at once → precedence test |
-| `fnol_07_inconsistent_dates.txt` | Expired-policy inconsistency, non-blocking |
-| `fnol_08_pdf_sample.pdf` | Same pipeline, PDF input instead of text |
-
----
-
-## Testing
+### 2. Run the automated tests
 
 ```bash
 pytest -v
 ```
 
-23 tests covering:
-- Field extraction (including multi-line values and placeholder normalization)
-- Missing-field and inconsistency detection
-- Each routing rule individually
-- The multi-flag precedence edge case
-- End-to-end pipeline runs against every file in `sample_docs/`, including the PDF
+### 3. Run one claim from the CLI
+
+```bash
+python main.py sample_docs/fnol_01_fast_track.txt
+```
+
+### 4. Try the browser UI
+
+```bash
+python app.py
+```
+
+Open **http://localhost:5000** and either select a sample, paste FNOL text, or upload a `.txt` / `.pdf` document.
+
+### 5. Try the API
+
+Health check:
+
+```bash
+curl http://localhost:5000/api/v1/health
+```
+
+Process text:
+
+```bash
+curl -X POST http://localhost:5000/api/v1/claims/process-text \\
+  -H "Content-Type: application/json" \\
+  -d '{"text":"Policy Number: PA-4471-2026\nPolicyholder Name: Maria Gonzalez\nDate of Incident: 06/14/2026\nLocation: Springfield, IL\nIncident Description: Rear-ended at a stop light.\nClaimant Name: Maria Gonzalez\nEstimated Damage: $1,150.00\nType of Claim: Collision\nSupporting Documents: photos.jpg\nInitial Damage Estimate: $1,150.00"}'
+```
 
 ---
 
-## Limitations & Future Improvements
+## Architecture
 
-- **Free-text/unstructured input.** The extractor needs a labeled field to
-  find a value. A natural next step is an LLM-assisted fallback (e.g. via the
-  Anthropic API) that only activates for fields the regex extractor couldn't
-  find, with the deterministic extractor remaining the primary path. This was
-  left out of the delivered pipeline so grading doesn't depend on network
-  access or an API key.
-- **Multiple vehicles/parties.** The schema captures one claimant/third-party
-  block per document; a real filing can have several vehicles and injured
-  parties, which would need a repeated-section parser.
-- **Currency/locale.** Amount parsing assumes USD-style numbers
-  (`$1,234.56`); other formats would need locale-aware parsing.
-- **Confidence scoring.** A field is currently either found or not; a
-  production version might attach a confidence score per field so borderline
-  extractions get lighter-touch review instead of being treated like a clean match.
+```text
+txt / pdf / pasted text
+          │
+          ▼
+   ┌───────────────┐
+   │  extractor.py │  label-based field extraction
+   └───────┬───────┘
+           ▼
+   ┌───────────────┐
+   │ validator.py  │  mandatory fields + data quality
+   └───────┬───────┘
+           ▼
+   ┌───────────────┐
+   │   router.py   │  safety-first routing + risk signals
+   └───────┬───────┘
+           ▼
+   ┌───────────────┐
+   │  metrics.py   │  completeness + processing metrics
+   └───────┬───────┘
+           ▼
+   ┌───────────────┐
+   │  pipeline.py  │  consistent result object
+   └───────┬───────┘
+           │
+      ┌────┴────┐
+      ▼         ▼
+    CLI       Flask API/UI
+```
+
+### Core modules
+
+| Module | Responsibility |
+|---|---|
+| `agent/extractor.py` | Reads TXT/PDF content and extracts labeled FNOL fields using a schema-driven regex approach. |
+| `agent/validator.py` | Identifies missing mandatory fields and data-quality inconsistencies such as invalid amounts and dates outside the policy period. |
+| `agent/router.py` | Applies safety-first routing precedence and returns structured risk signals plus human-readable reasoning. |
+| `agent/metrics.py` | Calculates claim completeness, issue counts, risk-signal count, and automation eligibility. |
+| `agent/pipeline.py` | Orchestrates extraction, validation, routing, metrics, and final output. |
+| `app.py` | Thin Flask layer exposing the browser UI and versioned JSON API. |
+| `main.py` | CLI entry point for individual and batch processing. |
+| `tests/test_agent.py` | Automated coverage for extraction, validation, routing, and end-to-end sample processing. |
+
+---
+
+## Claim-processing metrics
+
+Every processed claim includes a `processingMetrics` object so downstream systems or a reviewer can quantify intake quality instead of looking only at the final route.
+
+Example:
+
+```json
+"processingMetrics": {
+  "mandatoryFieldCompletenessPct": 100.0,
+  "fieldsExtracted": 15,
+  "fieldsExpected": 15,
+  "missingFieldCount": 0,
+  "inconsistencyCount": 0,
+  "riskSignalCount": 1,
+  "automationEligible": true,
+  "recommendedRoute": "Fast-Track"
+}
+```
+
+### What the metrics mean
+
+| Metric | Meaning |
+|---|---|
+| `mandatoryFieldCompletenessPct` | Percentage of routing-critical fields successfully populated. |
+| `fieldsExtracted` / `fieldsExpected` | Overall extraction coverage across the supported FNOL schema. |
+| `missingFieldCount` | Number of mandatory fields that prevent a clean automated decision. |
+| `inconsistencyCount` | Number of data-quality inconsistencies detected by validation. |
+| `riskSignalCount` | Number of structured routing/risk signals produced by the router. |
+| `automationEligible` | Whether the recommended route is eligible for straight-through processing under the current rules. |
+| `recommendedRoute` | Final workflow recommendation. |
+
+These are **processing-quality and routing metrics**, not operational KPIs such as real insurer cycle time or claim savings; the repository does not have production claims data and does not fabricate those figures.
+
+---
+
+## Routing logic
+
+The router uses an explicit safety-first precedence order:
+
+| Priority | Condition | Route |
+|---:|---|---|
+| 1 | Mandatory field missing | **Manual Review** |
+| 2 | Fraud-indicator language detected | **Investigation Flag** |
+| 3 | Injury / bodily-injury claim | **Specialist Queue** |
+| 4 | Valid estimated damage below `$25,000` | **Fast-Track** |
+| 5 | Otherwise | **Standard Review** |
+
+Additional safety gates send invalid or zero-dollar damage values to Manual Review instead of applying the threshold blindly.
+
+The router also emits structured signals such as:
+
+```json
+{
+  "code": "FRAUD_INDICATOR",
+  "severity": "critical",
+  "details": ["staged", "inconsistent"]
+}
+```
+
+This makes the routing decision both machine-readable and easy for a human reviewer to understand.
+
+---
+
+## Output contract
+
+A successful pipeline result contains:
+
+```json
+{
+  "sourceFile": "fnol_03_fraud_flag.txt",
+  "extractedFields": {},
+  "missingFields": [],
+  "inconsistencies": [],
+  "recommendedRoute": "Investigation Flag",
+  "reasoning": "...",
+  "riskSignals": [],
+  "processingMetrics": {}
+}
+```
+
+The API wraps this result in a consistent envelope:
+
+```json
+{
+  "success": true,
+  "data": {
+    "sourceFile": "fnol_03_fraud_flag.txt",
+    "recommendedRoute": "Investigation Flag",
+    "processingMetrics": {}
+  }
+}
+```
+
+Errors use the same predictable structure:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_INPUT",
+    "message": "The supplied FNOL text is invalid or could not be parsed.",
+    "requestId": null
+  }
+}
+```
+
+Unexpected server errors receive a request ID so the corresponding application log entry can be traced without exposing internal exception details to the client.
+
+---
+
+## API reference
+
+New integrations should use `/api/v1/`.
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/api/v1/health` | Service health check. |
+| `GET` | `/api/v1/samples` | List available sample documents. |
+| `GET` | `/api/v1/samples/<filename>` | Get metadata for one sample. |
+| `GET` | `/api/v1/samples/<filename>/text` | Read a text sample for preview. |
+| `POST` | `/api/v1/claims/process-text` | Process raw FNOL text from JSON. |
+| `POST` | `/api/v1/claims/process-upload` | Process an uploaded `.txt` or `.pdf`. |
+| `POST` | `/api/v1/claims/process-sample/<filename>` | Process a repository sample. |
+
+The older `/api/...` paths remain as compatibility aliases for existing clients.
+
+### HTTP behavior
+
+- `200` — successful request
+- `400` — malformed request or missing input
+- `404` — unknown sample
+- `413` — upload exceeds the 10 MB limit
+- `415` — unsupported file type
+- `422` — supplied document/text cannot be processed
+- `500` — unexpected internal server error
+- `503` — sample resources unavailable
+
+---
+
+## Sample claims
+
+The repository includes eight deliberately different examples:
+
+| Sample | Scenario | Expected route |
+|---|---|---|
+| `fnol_01_fast_track.txt` | Clean, low-damage claim | Fast-Track |
+| `fnol_02_missing_fields.txt` | Missing mandatory information | Manual Review |
+| `fnol_03_fraud_flag.txt` | Fraud-indicator keywords | Investigation Flag |
+| `fnol_04_injury.txt` | Bodily injury | Specialist Queue |
+| `fnol_05_standard_review.txt` | Clean, high-damage claim | Standard Review |
+| `fnol_06_multiple_flags.txt` | Multiple rules triggered simultaneously | Manual Review |
+| `fnol_07_inconsistent_dates.txt` | Loss outside policy period | Fast-Track + data-quality warning |
+| `fnol_08_pdf_sample.pdf` | PDF input | PDF extraction path |
+
+The multi-flag sample is particularly useful for demonstrating rule precedence: missing mandatory data takes priority over fraud, injury, and damage-based routing.
+
+---
+
+## Extraction and validation details
+
+The extractor supports common FNOL label variants including:
+
+- `Policy Number` / `Policy ID`
+- `Policyholder Name` / `Policy Holder Name`
+- `Date of Incident`
+- `Estimated Damage` / `Estimated Loss` / `Estimated Repair Cost`
+- `Type of Claim`
+- `Supporting Documents` / `Documents Attached`
+- `Initial Damage Estimate` / `Initial Loss Estimate`
+
+Placeholder values such as `N/A`, `Nil`, `None`, `Not Available`, `null`, and `--` are treated as missing.
+
+Validation also checks for malformed or non-positive monetary values, invalid dates, loss dates outside the policy period, unsupported claim types, and large discrepancies between the initial estimate and estimated damage.
+
+---
+
+## Testing
+
+Run:
+
+```bash
+pytest -v
+```
+
+The test suite covers:
+
+- Standard and alternative field labels
+- Placeholder normalization
+- Multi-line and separator variations
+- Duplicate fields
+- Type/error handling
+- Date and money validation
+- Policy-period checks
+- Estimate discrepancies
+- Claim-type aliases
+- Every routing category
+- Routing precedence
+- Structured risk signals
+- End-to-end processing across the sample documents, including PDF input
+
+The README intentionally does not hard-code a test count so the documentation remains accurate as coverage evolves.
+
+---
+
+## Why deterministic processing?
+
+For this portfolio project, the runtime decision engine intentionally does not call an LLM.
+
+A deterministic pipeline is useful for claims triage because it is:
+
+1. **Explainable** — each decision maps to an explicit rule.
+2. **Repeatable** — the same document produces the same decision.
+3. **Testable** — edge cases can be represented as automated tests.
+4. **Offline** — no API key or network access is needed.
+5. **Auditable** — risk signals and reasoning are returned with the result.
+
+An LLM-assisted extraction fallback could be added later for genuinely unstructured narratives, while retaining deterministic rules as the final routing control.
+
+---
+
+## Project structure
+
+```text
+FNOL-Claims-Processing-Agent/
+├── agent/
+│   ├── extractor.py
+│   ├── validator.py
+│   ├── router.py
+│   ├── metrics.py
+│   └── pipeline.py
+├── sample_docs/
+├── scripts/
+├── static/
+├── templates/
+├── tests/
+├── app.py
+├── main.py
+├── requirements.txt
+├── .gitignore
+├── DEMO_SCRIPT.md
+└── README.md
+```
+
+Generated output and local development artifacts are intentionally ignored by Git.
 
 ---
 
 ## Deployment
 
-This is built and tested to run locally. To push it to your own GitHub repo:
+For local development:
 
 ```bash
-cd fnol-claims-agent
-git init
-git add .
-git commit -m "FNOL claims processing agent"
-git branch -M main
-git remote add origin <your-repo-url>
-git push -u origin main
+python app.py
 ```
 
-To put the web UI on the public internet rather than `localhost`, deploy
-`app.py` like any small Flask app (Render, Railway, Fly.io, and
-PythonAnywhere all have free tiers): point the platform at `app.py` and run it
-behind a production server (`gunicorn app:app`) instead of the Flask dev
-server. There's no database or API key dependency, so it should deploy as-is —
-this step is outside the scope of the assessment and isn't wired up here.
+For a production WSGI server:
+
+```bash
+gunicorn app:app
+```
+
+The application has no database or external API-key dependency, which keeps deployment simple. For a public deployment, add HTTPS and platform-appropriate resource limits and logging.
 
 ---
- <img width="946" height="438" alt="Screenshot 2026-07-08 145924" src="https://github.com/user-attachments/assets/d35d22d3-9d8a-49a9-93e8-98e79025874b" />
 
- <img width="948" height="445" alt="Screenshot 2026-07-08 145950" src="https://github.com/user-attachments/assets/22fb2b4b-f93a-446e-9a12-642eadce2723" />
+## Limitations and next steps
 
- <img width="950" height="443" alt="Screenshot 2026-07-08 150014" src="https://github.com/user-attachments/assets/12021085-0220-4912-9105-ef7009224714" />
+This is a portfolio/assessment implementation rather than a production claims platform.
 
+Potential next improvements:
 
-<img width="949" height="435" alt="Screenshot 2026-07-08 145901" src="https://github.com/user-attachments/assets/907b52c0-f35c-4dc6-8a2b-0fc90b0fac53" />
+- LLM-assisted fallback for unstructured FNOL narratives
+- Confidence scores for extracted fields
+- Support for multiple vehicles, claimants, and injured parties
+- Locale-aware currencies and dates
+- Persistent claim/audit storage
+- Authentication and role-based access
+- CI/CD with automated tests on every pull request
+- Operational dashboards for aggregate claim-routing metrics
 
+---
 
+## Recruiter walkthrough
 
+If you only have a few minutes:
+
+1. Read the architecture above.
+2. Run `pytest -v`.
+3. Run `python app.py` and open the browser UI.
+4. Try `fnol_01_fast_track.txt` for a clean automated route.
+5. Try `fnol_06_multiple_flags.txt` to see precedence and risk signals.
+6. Try `fnol_08_pdf_sample.pdf` to see the PDF path.
+7. Call `/api/v1/health` and `/api/v1/claims/process-text` to inspect the API contract.
+
+This demonstrates extraction, validation, business-rule routing, explainability, metrics, API design, error handling, testing, and a usable frontend without requiring any external service.
+
+---
+
+## Demo assets
+
+See [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md) for the walkthrough script.
