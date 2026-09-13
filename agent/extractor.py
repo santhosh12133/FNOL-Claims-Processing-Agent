@@ -1,7 +1,7 @@
 """
 extractor.py
 ------------
-Reads FNOL documents (.txt/.pdf) and extracts known fields with a
+Reads FNOL documents (.txt/.pdf/.docx) and extracts known fields with a
 label-aware, deterministic parser. The extractor is intentionally offline
 and explainable so the same input produces the same output everywhere.
 """
@@ -12,6 +12,11 @@ try:
     import pdfplumber
 except ImportError:
     pdfplumber = None
+
+try:
+    from docx import Document
+except ImportError:
+    Document = None
 
 
 FIELD_SCHEMA = {
@@ -76,14 +81,9 @@ def _build_pattern(flat_fields):
         for label in labels:
             all_labels.append((label, field_key))
 
-    # Longest first prevents "Description" from winning over
-    # "Description of Accident".
     all_labels.sort(key=lambda pair: len(pair[0]), reverse=True)
     alternation = "|".join(re.escape(label) for label, _ in all_labels)
 
-    # A label may be followed by ':' or '-' and values may span lines.
-    # The next recognized label is the boundary; this also handles documents
-    # that omit punctuation after a field label.
     pattern = re.compile(
         rf"(?P<label>{alternation})\s*(?:[:\-]|(?=\S))\s*"
         rf"(?P<value>.*?)"
@@ -107,8 +107,26 @@ def _clean_value(value: str):
     return value or None
 
 
+def _read_docx_text(path: Path) -> str:
+    """Extract paragraph and table text from a .docx Word document."""
+    if Document is None:
+        raise RuntimeError(
+            "python-docx is required to read Word files. Install with: pip install python-docx"
+        )
+
+    document = Document(str(path))
+    parts = [paragraph.text for paragraph in document.paragraphs if paragraph.text.strip()]
+    for table in document.tables:
+        for row in table.rows:
+            cells = [cell.text.strip() for cell in row.cells]
+            row_text = " | ".join(cell for cell in cells if cell)
+            if row_text:
+                parts.append(row_text)
+    return "\n".join(parts)
+
+
 def read_text_from_file(filepath: str) -> str:
-    """Load raw text from a .txt or .pdf FNOL document."""
+    """Load raw text from a .txt, .pdf, or .docx FNOL document."""
     path = Path(filepath)
     suffix = path.suffix.lower()
 
@@ -128,7 +146,10 @@ def read_text_from_file(filepath: str) -> str:
                     text_parts.append(f"[Page {page_number}]\n{page_text}")
         return "\n".join(text_parts)
 
-    raise ValueError(f"Unsupported file type '{suffix}'. Only .txt and .pdf are supported.")
+    if suffix == ".docx":
+        return _read_docx_text(path)
+
+    raise ValueError(f"Unsupported file type '{suffix}'. Only .pdf and .docx files are accepted by the web intake.")
 
 
 def extract_fields(text: str) -> dict:
@@ -144,7 +165,6 @@ def extract_fields(text: str) -> dict:
             continue
 
         value = _clean_value(match.group("value"))
-        # Prefer the first non-empty value when a document repeats a field.
         if field_key not in found or found[field_key] is None:
             found[field_key] = value
 
