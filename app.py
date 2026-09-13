@@ -2,12 +2,7 @@
 app.py
 ------
 Flask front end and versioned JSON API for the FNOL Claims Processing Agent.
-The web layer stays thin and delegates all extraction, validation, and routing
-to the shared agent pipeline.
-
-Run:
-    python app.py
-Then open http://localhost:5000
+The web intake accepts PDF and Word (.docx) documents only.
 """
 import logging
 import tempfile
@@ -24,6 +19,7 @@ BASE_DIR = Path(__file__).resolve().parent
 SAMPLE_DIR = BASE_DIR / "sample_docs"
 MAX_UPLOAD_SIZE = 10 * 1024 * 1024
 API_VERSION = "v1"
+ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".docx"}
 
 app = Flask(__name__)
 app.json.sort_keys = False
@@ -32,29 +28,19 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_SIZE
 logger = logging.getLogger(__name__)
 
 SAMPLE_LABELS = {
-    "fnol_01_fast_track.txt": "Clean claim, low damage",
-    "fnol_02_missing_fields.txt": "Missing mandatory fields",
-    "fnol_03_fraud_flag.txt": "Fraud-indicator keywords",
-    "fnol_04_injury.txt": "Injury claim",
-    "fnol_05_standard_review.txt": "Clean claim, high damage",
-    "fnol_06_multiple_flags.txt": "Multiple rules at once",
-    "fnol_07_inconsistent_dates.txt": "Expired-policy inconsistency",
     "fnol_08_pdf_sample.pdf": "PDF input",
 }
 
 
 def _request_id():
-    """Return a short identifier so API errors can be traced in logs."""
     return uuid.uuid4().hex[:12]
 
 
 def _success(data, status=200):
-    """Return the standard API success envelope."""
     return jsonify({"success": True, "data": data}), status
 
 
 def _error(message: str, status: int, code: str, request_id: str | None = None):
-    """Return the standard API error envelope without leaking internals."""
     return jsonify({
         "success": False,
         "error": {
@@ -66,7 +52,6 @@ def _error(message: str, status: int, code: str, request_id: str | None = None):
 
 
 def _safe_sample_path(filename: str):
-    """Resolve a sample path while preventing path traversal."""
     requested = (SAMPLE_DIR / filename).resolve()
     sample_root = SAMPLE_DIR.resolve()
     try:
@@ -77,7 +62,6 @@ def _safe_sample_path(filename: str):
 
 
 def _process_document_response(path: Path, source_name: str | None = None):
-    """Process one document and return the shared API result shape."""
     result = process_document(str(path))
     if source_name:
         result["sourceFile"] = source_name
@@ -112,84 +96,15 @@ def index():
     return render_template("index.html")
 
 
-# ---------- API v1 ----------
-
 @app.get("/api/v1/health")
 def health():
     return _success({"status": "ok", "service": "fnol-claims-agent", "version": API_VERSION})
 
 
-@app.get("/api/v1/samples")
-def list_samples():
-    if not SAMPLE_DIR.exists():
-        return _error("Sample documents are currently unavailable.", 503, "SAMPLES_UNAVAILABLE")
-
-    try:
-        samples = []
-        for path in sorted(SAMPLE_DIR.iterdir()):
-            if path.is_file() and path.suffix.lower() in (".txt", ".pdf"):
-                samples.append({
-                    "filename": path.name,
-                    "label": SAMPLE_LABELS.get(path.name, path.name),
-                    "isPdf": path.suffix.lower() == ".pdf",
-                })
-        return _success(samples)
-    except OSError:
-        logger.exception("Unable to list sample documents")
-        return _error("Sample documents could not be loaded.", 500, "SAMPLES_READ_ERROR")
-
-
-@app.get("/api/v1/samples/<filename>")
-def sample_detail(filename):
-    path = _safe_sample_path(filename)
-    if path is None or not path.exists() or not path.is_file() or path.suffix.lower() not in (".txt", ".pdf"):
-        return _error("Unknown or unsupported sample.", 404, "SAMPLE_NOT_FOUND")
-
-    return _success({
-        "filename": path.name,
-        "label": SAMPLE_LABELS.get(path.name, path.name),
-        "isPdf": path.suffix.lower() == ".pdf",
-    })
-
-
-@app.get("/api/v1/samples/<filename>/text")
-def sample_text(filename):
-    path = _safe_sample_path(filename)
-    if path is None or not path.exists() or not path.is_file() or path.suffix.lower() != ".txt":
-        return _error("Not a readable text sample.", 404, "SAMPLE_NOT_FOUND")
-
-    try:
-        return _success({"filename": path.name, "text": path.read_text(encoding="utf-8", errors="replace")})
-    except OSError:
-        logger.exception("Unable to read sample text: %s", filename)
-        return _error("The selected sample could not be read.", 500, "SAMPLE_READ_ERROR")
-
-
-@app.post("/api/v1/claims/process-text")
-def process_pasted_text():
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return _error("Request body must be valid JSON.", 400, "INVALID_JSON")
-
-    text = (data.get("text") or "").strip()
-    if not text:
-        return _error("No text provided.", 400, "EMPTY_TEXT")
-
-    try:
-        result = process_text(text, source_name="pasted-input.txt")
-        return _success(result)
-    except (ValueError, TypeError):
-        return _error("The supplied FNOL text is invalid or could not be parsed.", 422, "INVALID_INPUT")
-    except Exception:
-        request_id = _request_id()
-        logger.exception("Unexpected pasted-text processing error request_id=%s", request_id)
-        return _error("The FNOL text could not be processed due to an internal error.", 500, "INTERNAL_ERROR", request_id)
-
-
 @app.post("/api/v1/claims/process-upload")
 def process_uploaded_file():
     if "file" not in request.files:
-        return _error("No file uploaded.", 400, "FILE_MISSING")
+        return _error("No file uploaded. Please choose a PDF or Word document.", 400, "FILE_MISSING")
 
     upload = request.files["file"]
     original_name = secure_filename(upload.filename or "")
@@ -197,8 +112,12 @@ def process_uploaded_file():
         return _error("The uploaded file has no valid filename.", 400, "INVALID_FILENAME")
 
     suffix = Path(original_name).suffix.lower()
-    if suffix not in (".txt", ".pdf"):
-        return _error("Only .txt and .pdf files are supported.", 415, "UNSUPPORTED_FILE_TYPE")
+    if suffix not in ALLOWED_UPLOAD_EXTENSIONS:
+        return _error(
+            "Unsupported file type. Only PDF (.pdf) and Word (.docx) documents are accepted.",
+            415,
+            "UNSUPPORTED_FILE_TYPE",
+        )
 
     tmp_path = None
     try:
@@ -222,10 +141,44 @@ def process_uploaded_file():
                 logger.warning("Unable to remove temporary upload: %s", tmp_path)
 
 
+# Sample endpoints are retained for backward compatibility with older clients,
+# but the current web UI intentionally does not expose sample selection.
+@app.get("/api/v1/samples")
+def list_samples():
+    if not SAMPLE_DIR.exists():
+        return _error("Sample documents are currently unavailable.", 503, "SAMPLES_UNAVAILABLE")
+
+    try:
+        samples = []
+        for path in sorted(SAMPLE_DIR.iterdir()):
+            if path.is_file() and path.suffix.lower() == ".pdf":
+                samples.append({
+                    "filename": path.name,
+                    "label": SAMPLE_LABELS.get(path.name, path.name),
+                    "isPdf": True,
+                })
+        return _success(samples)
+    except OSError:
+        logger.exception("Unable to list sample documents")
+        return _error("Sample documents could not be loaded.", 500, "SAMPLES_READ_ERROR")
+
+
+@app.get("/api/v1/samples/<filename>")
+def sample_detail(filename):
+    path = _safe_sample_path(filename)
+    if path is None or not path.exists() or not path.is_file() or path.suffix.lower() != ".pdf":
+        return _error("Unknown or unsupported sample.", 404, "SAMPLE_NOT_FOUND")
+    return _success({
+        "filename": path.name,
+        "label": SAMPLE_LABELS.get(path.name, path.name),
+        "isPdf": True,
+    })
+
+
 @app.post("/api/v1/claims/process-sample/<filename>")
 def process_sample(filename):
     path = _safe_sample_path(filename)
-    if path is None or not path.exists() or not path.is_file() or path.suffix.lower() not in (".txt", ".pdf"):
+    if path is None or not path.exists() or not path.is_file() or path.suffix.lower() != ".pdf":
         return _error("Unknown or unsupported sample.", 404, "SAMPLE_NOT_FOUND")
 
     try:
@@ -238,20 +191,35 @@ def process_sample(filename):
         return _error("The sample could not be processed due to an internal error.", 500, "INTERNAL_ERROR", request_id)
 
 
-# ---------- Backward-compatible aliases for the existing UI/clients ----------
-# These keep existing integrations working while new clients use /api/v1/.
+# Kept for API compatibility with existing integrations. The web UI does not
+# expose pasted text; document intake is intentionally PDF/Word only.
+@app.post("/api/v1/claims/process-text")
+def process_pasted_text():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return _error("Request body must be valid JSON.", 400, "INVALID_JSON")
 
+    text = (data.get("text") or "").strip()
+    if not text:
+        return _error("No text provided.", 400, "EMPTY_TEXT")
+
+    try:
+        return _success(process_text(text, source_name="api-input.txt"))
+    except (ValueError, TypeError):
+        return _error("The supplied FNOL text is invalid or could not be parsed.", 422, "INVALID_INPUT")
+    except Exception:
+        request_id = _request_id()
+        logger.exception("Unexpected text processing error request_id=%s", request_id)
+        return _error("The FNOL text could not be processed due to an internal error.", 500, "INTERNAL_ERROR", request_id)
+
+
+# Backward-compatible aliases.
 @app.get("/api/samples")
 def legacy_list_samples():
     return list_samples()
 
 
-@app.get("/api/sample-text/<filename>")
-def legacy_sample_text(filename):
-    return sample_text(filename)
-
-
-@app.get("/api/process-sample/<filename>")
+@app.post("/api/process-sample/<filename>")
 def legacy_process_sample(filename):
     return process_sample(filename)
 
