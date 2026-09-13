@@ -6,6 +6,8 @@ const ROUTE_CLASS = {
   "Manual Review": "route-manual",
 };
 
+const API_BASE = "/api/v1";
+
 const CATEGORY_LABELS = {
   policyInformation: "Policy Information",
   incidentInformation: "Incident Information",
@@ -59,13 +61,24 @@ const FIELD_LABELS = {
 async function fetchJSON(url, options) {
   try {
     const res = await fetch(url, options);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return { error: data.error || `Request failed (${res.status}).`, code: data.code || "REQUEST_ERROR" };
+    const body = await res.json().catch(() => ({}));
+
+    if (!res.ok || body.success === false) {
+      const error = body.error || {};
+      return {
+        error: typeof error === "string" ? error : error.message || `Request failed (${res.status}).`,
+        code: typeof error === "object" ? error.code || "REQUEST_ERROR" : "REQUEST_ERROR",
+        requestId: typeof error === "object" ? error.requestId : null,
+      };
     }
-    return data;
-  } catch (error) {
-    return { error: "Unable to reach the local claims processor. Check that the Flask app is running.", code: "NETWORK_ERROR" };
+
+    // v1 endpoints wrap payloads in { success, data }.
+    return body.success === true && "data" in body ? body.data : body;
+  } catch (_error) {
+    return {
+      error: "Unable to reach the local claims processor. Check that the Flask app is running.",
+      code: "NETWORK_ERROR",
+    };
   }
 }
 
@@ -80,7 +93,7 @@ function setStatus(text) {
 }
 
 async function loadSamples() {
-  const samples = await fetchJSON("/api/samples");
+  const samples = await fetchJSON(`${API_BASE}/samples`);
   const row = document.getElementById("sampleRow");
   row.innerHTML = "";
   if (samples.error) {
@@ -109,16 +122,16 @@ async function onSampleClick(sample) {
       textInput.value = "";
       fileHint.textContent = `Loaded: ${sample.filename} (PDF processed directly)`;
     } else {
-      const data = await fetchJSON(`/api/sample-text/${encodeURIComponent(sample.filename)}`);
+      const data = await fetchJSON(`${API_BASE}/samples/${encodeURIComponent(sample.filename)}/text`);
       if (data.error) {
-        renderResult(data);
+        renderError(data);
         return;
       }
       textInput.value = data.text || "";
       fileHint.textContent = `Loaded: ${sample.filename}`;
     }
 
-    const result = await fetchJSON(`/api/process-sample/${encodeURIComponent(sample.filename)}`);
+    const result = await fetchJSON(`${API_BASE}/claims/process-sample/${encodeURIComponent(sample.filename)}`, { method: "POST" });
     renderResult(result);
   } finally {
     setBusy(false);
@@ -248,7 +261,7 @@ document.getElementById("processBtn").addEventListener("click", async () => {
   setBusy(true);
   setStatus("PROCESSING");
   try {
-    const result = await fetchJSON("/api/process-text", {
+    const result = await fetchJSON(`${API_BASE}/claims/process-text`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
@@ -271,7 +284,7 @@ document.getElementById("fileInput").addEventListener("change", async (event) =>
   const formData = new FormData();
   formData.append("file", file);
   try {
-    const result = await fetchJSON("/api/process-upload", { method: "POST", body: formData });
+    const result = await fetchJSON(`${API_BASE}/claims/process-upload`, { method: "POST", body: formData });
     document.getElementById("fileHint").textContent = result.error ? result.error : `Processed: ${file.name}`;
     renderResult(result);
   } finally {
