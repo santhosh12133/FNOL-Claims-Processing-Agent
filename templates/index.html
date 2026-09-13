@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='6') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='7') }}">
 </head>
 <body>
   <header class="topbar">
@@ -36,20 +36,20 @@
       </section>
     </section>
     <section id="resultPage" class="page page-result" aria-labelledby="resultTitle" hidden>
-      <div class="result-page-header"><div><p class="eyebrow">FNOL PROCESSING AGENT</p><h1 id="resultTitle">Routing decision</h1><p>Extracted claim details, data-quality issues, and the recommended claims workflow.</p></div><button id="newDocumentBtn" class="secondary-btn" type="button"><span aria-hidden="true">←</span> Upload another document</button></div>
+      <div class="result-page-header"><div><p class="eyebrow">FNOL PROCESSING AGENT</p><h1 id="resultTitle">Routing decision</h1><p>Extracted claim details, data-quality issues, and the recommended claims workflow.</p></div><button id="newDocumentBtn" class="next-btn" type="button"><span aria-hidden="true">↑</span> Upload another document</button></div>
       <div id="successBanner" class="success-banner"><div class="success-icon" aria-hidden="true">✓</div><div><strong>Document processed successfully</strong><span id="resultSource"></span></div></div>
       <div class="result-card">
         <div class="recommendation" id="recommendation"><div class="recommendation-icon" aria-hidden="true">⚑</div><div class="recommendation-label">Routing recommendation</div><div id="stamp" class="route-name">Manual Review</div><p id="recommendationSummary">The claim requires review based on the processing rules.</p></div>
         <div class="metric-grid"><div class="metric"><span>Completeness</span><strong id="completenessMetric">—</strong></div><div class="metric"><span>Missing fields</span><strong id="missingMetric">0</strong></div><div class="metric"><span>Inconsistencies</span><strong id="inconsistencyMetric">0</strong></div><div class="metric"><span>Risk signals</span><strong id="riskMetric">0</strong></div></div>
-        <div class="result-section rationale-section"><div class="section-heading"><span class="section-icon">≡</span><strong>Rationale</strong></div><p id="reasoning" class="reasoning"></p></div>
-        <div class="result-section"><div class="section-heading"><span class="section-icon">☷</span><strong>Data quality</strong></div><div class="quality-grid"><div><span class="quality-label">Missing mandatory fields</span><ul id="missingList" class="flag-list"></ul></div><div><span class="quality-label">Inconsistencies</span><ul id="inconsistencyList" class="flag-list"></ul></div></div></div>
-        <div id="incidentDescription" class="result-section incident-section" hidden><div class="section-heading"><span class="section-icon">▤</span><strong>Incident description</strong></div><p id="incidentDescriptionText"></p></div>
-        <div class="result-section"><div class="section-heading"><span class="section-icon">▦</span><strong>Extracted claim details</strong></div><div id="fieldsGrid" class="fields-grid"></div></div>
+        <div class="result-section rationale-section"><div class="section-heading"><span class="section-icon" aria-hidden="true">≡</span><strong>Rationale</strong></div><p id="reasoning" class="reasoning"></p></div>
+        <div class="result-section"><div class="section-heading"><span class="section-icon" aria-hidden="true">☷</span><strong>Data quality</strong></div><div class="quality-grid"><div><span class="quality-label">Missing mandatory fields</span><ul id="missingList" class="flag-list"></ul></div><div><span class="quality-label">Inconsistencies</span><ul id="inconsistencyList" class="flag-list"></ul></div></div></div>
+        <div id="incidentDescription" class="result-section incident-section" hidden><div class="section-heading"><span class="section-icon" aria-hidden="true">▤</span><strong>Incident description</strong></div><p id="incidentDescriptionText"></p></div>
+        <div class="result-section"><div class="section-heading"><span class="section-icon" aria-hidden="true">▦</span><strong>Extracted claim details</strong></div><div id="fieldsGrid" class="fields-grid"></div></div>
         <div class="result-actions"><button id="backBtn" class="secondary-btn" type="button"><span aria-hidden="true">←</span> Back to claim intake</button><button id="downloadBtn" class="secondary-btn" type="button"><span aria-hidden="true">↓</span> Download result (JSON)</button></div>
       </div>
     </section>
   </main>
   <footer class="footer"><span>Deterministic extraction · Validation · Explainable routing</span><span>Built for claims operations</span></footer>
-  <script src="{{ url_for('static', filename='app.js', v='6') }}"></script>
+  <script src="{{ url_for('static', filename='app.js', v='7') }}"></script>
 </body>
 </html>
