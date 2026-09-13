@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='3') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='4') }}">
 </head>
 <body>
   <header class="topbar">
@@ -27,7 +27,7 @@
       <div>
         <p class="eyebrow">FNOL PROCESSING AGENT</p>
         <h1>Review and route a claim</h1>
-        <p class="intro-copy">Extract claim details, surface data-quality issues, and receive an explainable routing recommendation.</p>
+        <p class="intro-copy">Upload an FNOL document to extract claim details, surface data-quality issues, and receive an explainable routing recommendation.</p>
       </div>
     </section>
 
@@ -38,29 +38,31 @@
             <span class="panel-kicker">01</span>
             <h2>Claim intake</h2>
           </div>
-          <span class="panel-meta">TXT / PDF</span>
+          <span class="panel-meta">PDF / WORD</span>
         </div>
 
-        <div class="sample-section">
-          <div class="section-label">Try a sample</div>
-          <div class="sample-row" id="sampleRow"></div>
-        </div>
-
-        <div class="input-label-row">
-          <label for="textInput">FNOL document</label>
-          <span>Paste labeled fields</span>
-        </div>
-        <textarea id="textInput" spellcheck="false"
-          placeholder="Policy Number: PA-0001-2026&#10;Policyholder Name: Jane Doe&#10;Date of Loss: 06/01/2026&#10;...&#10;&#10;Or paste the full FNOL document here."></textarea>
-
-        <div class="intake-actions">
-          <label class="upload-btn">
-            <span aria-hidden="true">↑</span> Upload document
-            <input type="file" id="fileInput" accept=".txt,.pdf" hidden>
+        <div class="upload-zone" id="uploadZone">
+          <div class="upload-icon" aria-hidden="true">↑</div>
+          <h3>Upload FNOL document</h3>
+          <p>Drag and drop a document here, or choose a file from your computer.</p>
+          <p class="supported-types">Accepted formats: <strong>PDF</strong> and <strong>Word (.docx)</strong> · Maximum 10 MB</p>
+          <label class="upload-btn upload-btn--primary">
+            Choose document
+            <input type="file" id="fileInput" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
           </label>
-          <button id="processBtn" class="process-btn" type="button">Process claim <span aria-hidden="true">→</span></button>
         </div>
-        <p class="intake-hint" id="fileHint">Files stay local and are processed by the same pipeline as the CLI.</p>
+
+        <div class="selected-file" id="selectedFile" hidden>
+          <div class="selected-file__icon" aria-hidden="true">DOC</div>
+          <div class="selected-file__details">
+            <span class="selected-file__label">Selected document</span>
+            <strong id="selectedFileName"></strong>
+          </div>
+          <button id="removeFileBtn" class="remove-file" type="button" aria-label="Remove selected document">×</button>
+        </div>
+
+        <button id="processBtn" class="process-btn" type="button" disabled>Process claim <span aria-hidden="true">→</span></button>
+        <p class="intake-hint" id="fileHint">Only PDF and Word (.docx) documents can be submitted. Files are processed by the FNOL pipeline.</p>
       </section>
 
       <section class="panel result" aria-label="Case result">
@@ -69,13 +71,13 @@
             <span class="panel-kicker">02</span>
             <h2>Routing decision</h2>
           </div>
-          <span class="panel-meta" id="resultStatus">AWAITING INPUT</span>
+          <span class="panel-meta" id="resultStatus">AWAITING DOCUMENT</span>
         </div>
 
         <div id="resultEmpty" class="result-empty">
           <div class="empty-icon" aria-hidden="true">✓</div>
           <h3>No claim processed</h3>
-          <p>Select a sample, paste an FNOL, or upload a document to generate a routing decision.</p>
+          <p>Upload a PDF or Word FNOL document to generate a routing decision.</p>
         </div>
 
         <div id="resultCard" class="result-card" hidden>
@@ -117,9 +119,9 @@
 
   <footer class="footer">
     <span>Deterministic extraction · Validation · Explainable routing</span>
-    <span>Built for local FNOL triage</span>
+    <span>PDF / Word intake</span>
   </footer>
 
-  <script src="{{ url_for('static', filename='app.js', v='3') }}"></script>
+  <script src="{{ url_for('static', filename='app.js', v='4') }}"></script>
 </body>
 </html>
