@@ -1,9 +1,8 @@
 """
 extractor.py
 ------------
-Reads FNOL documents (.txt/.pdf/.docx) and extracts known fields with a
-label-aware, deterministic parser. The extractor is intentionally offline
-and explainable so the same input produces the same output everywhere.
+Reads FNOL documents (.txt/.pdf/.docx) and images (.jpg/.jpeg/.png/.webp)
+and extracts known fields with a label-aware, deterministic parser.
 """
 import re
 from pathlib import Path
@@ -17,6 +16,16 @@ try:
     from docx import Document
 except ImportError:
     Document = None
+
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
+
+try:
+    from rapidocr_onnxruntime import RapidOCR
+except ImportError:
+    RapidOCR = None
 
 
 FIELD_SCHEMA = {
@@ -125,8 +134,28 @@ def _read_docx_text(path: Path) -> str:
     return "\n".join(parts)
 
 
+def _read_image_text(path: Path) -> str:
+    """Extract text from a claim image using the bundled RapidOCR runtime."""
+    if Image is None or RapidOCR is None:
+        raise RuntimeError(
+            "Image OCR dependencies are not installed. Install with: pip install Pillow rapidocr-onnxruntime"
+        )
+
+    image = Image.open(path).convert("RGB")
+    ocr = RapidOCR()
+    result, _elapsed = ocr(image)
+    if not result:
+        return ""
+
+    lines = []
+    for item in result:
+        if len(item) >= 2 and item[1]:
+            lines.append(str(item[1]))
+    return "\n".join(lines)
+
+
 def read_text_from_file(filepath: str) -> str:
-    """Load raw text from a .txt, .pdf, or .docx FNOL document."""
+    """Load raw text from a .txt, .pdf, .docx, or image FNOL document."""
     path = Path(filepath)
     suffix = path.suffix.lower()
 
@@ -149,7 +178,10 @@ def read_text_from_file(filepath: str) -> str:
     if suffix == ".docx":
         return _read_docx_text(path)
 
-    raise ValueError(f"Unsupported file type '{suffix}'. Only .pdf and .docx files are accepted by the web intake.")
+    if suffix in {".jpg", ".jpeg", ".png", ".webp"}:
+        return _read_image_text(path)
+
+    raise ValueError(f"Unsupported file type '{suffix}'. Supported FNOL inputs are TXT, PDF, DOCX, JPG, JPEG, PNG, and WEBP.")
 
 
 def extract_fields(text: str) -> dict:
